@@ -450,3 +450,296 @@
   /* z-index sits above canvas nodes but below Obsidian modals */
   z-index: var(--layer-notice, 200);
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Filtered Files Widget
+   Uses Obsidian CSS variables throughout so all values respond to themes.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+.ffw-root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem 1rem;
+  overflow-y: auto;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+
+.ffw-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  position: sticky;
+  top: 0;
+  background: var(--background-secondary);
+  padding-bottom: 0.5rem;
+  z-index: 2;
+}
+
+.ffw-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ffw-search-row .search-input-container {
+  flex: 1 1 auto;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+
+.ffw-empty-state {
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.ffw-empty-state p {
+  margin: 0.25rem 0;
+}
+
+/* ── Sections list ─────────────────────────────────────────────────────────── */
+
+.ffw-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ffw-section {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  overflow: hidden;
+  transition: box-shadow 80ms ease, transform 80ms ease;
+}
+
+.ffw-section.is-drag-over {
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.ffw-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--background-secondary-alt);
+  cursor: grab;
+  user-select: none;
+}
+
+.ffw-section-header:active {
+  cursor: grabbing;
+}
+
+.ffw-drag-handle,
+.ffw-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  width: 1.1rem;
+  height: 1.1rem;
+  flex-shrink: 0;
+}
+
+.ffw-collapse-toggle {
+  cursor: pointer;
+}
+
+.ffw-section-title-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.ffw-section-title {
+  font-weight: 600;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ffw-section-meta {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ffw-section-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.ffw-section-body {
+  padding: 0.25rem 0.25rem 0.5rem;
+}
+
+.ffw-section.is-collapsed .ffw-section-body {
+  display: none;
+}
+
+.ffw-no-results,
+.ffw-truncated,
+.ffw-error {
+  padding: 0.5rem 0.75rem;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.ffw-error {
+  color: var(--text-error);
+}
+
+/* ── File list ─────────────────────────────────────────────────────────────── */
+
+.ffw-file-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ffw-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-normal);
+}
+
+.ffw-file-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.ffw-file-icon {
+  display: inline-flex;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Emoji icons assigned via the Iconic plugin */
+.ffw-file-icon--emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--icon-size, 18px);
+  line-height: 1;
+  width: var(--icon-size, 18px);
+  height: var(--icon-size, 18px);
+  color: inherit;
+}
+
+.ffw-file-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ffw-file-name {
+  font-size: var(--font-ui-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ffw-file-path {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Section edit modal ────────────────────────────────────────────────────── */
+
+.ffw-modal .modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.ffw-filter-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.ffw-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-secondary);
+  flex-wrap: wrap;
+}
+
+.ffw-filter-inputs {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.ffw-text-input {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+.ffw-type-select {
+  min-width: 6rem;
+}
+
+.ffw-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.ffw-filter-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 0.3rem;
+}
+
+.ffw-filter-remove:hover {
+  color: var(--text-error);
+}
+
+.ffw-add-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.ffw-empty {
+  padding: 0.5rem;
+  text-align: center;
+}

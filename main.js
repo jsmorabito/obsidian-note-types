@@ -26,6 +26,9 @@ const DEFAULT_SETTINGS = {
   objectTypes: [],
   templatesFolder: '',
   triggerKey: '',
+  // Filtered Files Widget
+  ffwSections: [],
+  ffwDisplayNameKey: '',
 };
 
 // ─── Filtered File Modal ──────────────────────────────────────────────────────
@@ -877,6 +880,755 @@ class ObjectTypeDeleteModal extends obsidian.Modal {
   }
 }
 
+// ─── Filtered Files Widget ────────────────────────────────────────────────────
+//
+// A sidebar panel that displays configurable lists of filtered files.
+// Each "section" has its own set of filter rules, sort order, and optional limit.
+// Sections are managed interactively inside the view itself; only a few global
+// preferences (display-name key, reset) live in the main settings tab.
+
+const FFW_VIEW_TYPE = 'filtered-files-widget-view';
+
+const FFW_FILTER_TYPE_LABELS = {
+  tag:         'Tag',
+  frontmatter: 'Frontmatter',
+  path:        'Path / folder',
+  name:        'File name',
+};
+
+const FFW_SORT_OPTIONS = [
+  { value: 'modified-desc',    label: 'Modified (newest)' },
+  { value: 'modified-asc',     label: 'Modified (oldest)' },
+  { value: 'created-desc',     label: 'Created (newest)'  },
+  { value: 'created-asc',      label: 'Created (oldest)'  },
+  { value: 'name-asc',         label: 'Name (A→Z)'        },
+  { value: 'name-desc',        label: 'Name (Z→A)'        },
+  { value: 'frontmatter-asc',  label: 'Frontmatter field (asc)'  },
+  { value: 'frontmatter-desc', label: 'Frontmatter field (desc)' },
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function ffwNewSectionId() {
+  return `sec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function ffwDefaultFilter(type) {
+  switch (type) {
+    case 'tag':         return { type: 'tag',         tag: '',      include: true };
+    case 'frontmatter': return { type: 'frontmatter', key: '',      value: '', comparison: 'equals' };
+    case 'path':        return { type: 'path',        pattern: '',  matchMode: 'starts-with', negate: false };
+    case 'name':        return { type: 'name',        pattern: '',  matchMode: 'contains', caseSensitive: false, negate: false };
+  }
+}
+
+function ffwDefaultSort() { return { field: 'modified-desc' }; }
+
+function ffwSortLabel(sort) {
+  switch (sort.field) {
+    case 'created-desc':     return 'Created (newest)';
+    case 'created-asc':      return 'Created (oldest)';
+    case 'modified-desc':    return 'Modified (newest)';
+    case 'modified-asc':     return 'Modified (oldest)';
+    case 'name-asc':         return 'Name (A-Z)';
+    case 'name-desc':        return 'Name (Z-A)';
+    case 'frontmatter-asc':  return `Frontmatter "${sort.frontmatterKey ?? ''}" (asc)`;
+    case 'frontmatter-desc': return `Frontmatter "${sort.frontmatterKey ?? ''}" (desc)`;
+    default:                 return sort.field;
+  }
+}
+
+/** Fuzzy match: every character in `query` must appear in `str` in order. */
+function ffwFuzzyMatch(query, str) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  const s = str.toLowerCase();
+  let n = 0;
+  for (let i = 0; i < s.length && n < q.length; i++) {
+    if (s[i] === q[n]) n++;
+  }
+  return n === q.length;
+}
+
+/** Read a file's icon/color from the Iconic plugin if installed. */
+function ffwGetIconicIcon(app, file) {
+  try {
+    const plugins = app.plugins?.plugins;
+    if (!plugins) return null;
+    const iconic = plugins.iconic;
+    if (!iconic) return null;
+    if (typeof iconic.getFileItem === 'function') {
+      const item = iconic.getFileItem(file.path);
+      if (item?.icon) return item;
+    }
+    const lm = iconic.ruleManager;
+    if (lm?.fileRulings instanceof Map) {
+      const c = lm.fileRulings.get(file.path);
+      if (c) {
+        const icon = c.icon ?? c.iconDefault ?? null;
+        if (icon) return { icon, color: c.color ?? null };
+      }
+    }
+    for (const src of [iconic.settings, iconic.data]) {
+      if (!src) continue;
+      for (const key of ['fileIcons', 'file', 'files']) {
+        const store = src[key];
+        if (!store) continue;
+        const entry = store[file.path];
+        if (entry?.icon) return entry;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/** Render an icon string (Lucide id or emoji) into an element, with optional color. */
+function ffwSetIconEl(el, icon, color) {
+  if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon)) {
+    obsidian.setIcon(el, icon);
+  } else {
+    el.setText(icon);
+    el.addClass('ffw-file-icon--emoji');
+  }
+  if (color) el.style.color = color;
+}
+
+/** Coerce a raw frontmatter value to a string for comparisons / display. */
+function ffwFormatValue(v) {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch { return ''; }
+}
+
+/** Normalise a tag string: trim, strip leading #, lower-case. */
+function ffwNormalizeTag(tag) {
+  return (tag || '').trim().replace(/^#/, '').toLowerCase();
+}
+
+// ── Per-filter evaluators ─────────────────────────────────────────────────────
+
+function ffwEvalTagFilter(cache, filter) {
+  const tag = ffwNormalizeTag(filter.tag);
+  if (!tag) return true;
+  const allTags = cache ? (obsidian.getAllTags(cache) ?? []).map(ffwNormalizeTag) : [];
+  const has = allTags.includes(tag);
+  return filter.include ? has : !has;
+}
+
+function ffwEvalFrontmatterFilter(cache, filter) {
+  if (!filter.key) return true;
+  const fm = cache?.frontmatter;
+  if (!fm) return filter.comparison === 'not-equals';
+  const raw = fm[filter.key];
+  if (filter.comparison === 'exists') return raw != null && raw !== '';
+  if (raw == null) return filter.comparison === 'not-equals';
+  const needle = filter.value.trim().toLowerCase();
+  const values = Array.isArray(raw) ? raw.map(ffwFormatValue) : [ffwFormatValue(raw)];
+  switch (filter.comparison) {
+    case 'equals':     return values.some((v) => v.toLowerCase() === needle);
+    case 'not-equals': return !values.some((v) => v.toLowerCase() === needle);
+    case 'contains':   return values.some((v) => v.toLowerCase().includes(needle));
+    default:           return true;
+  }
+}
+
+function ffwEvalPathFilter(file, filter) {
+  if (!filter.pattern) return true;
+  const path    = file.path;
+  const pattern = filter.pattern;
+  let matches;
+  switch (filter.matchMode) {
+    case 'starts-with': matches = path.startsWith(pattern); break;
+    case 'ends-with':   matches = path.endsWith(pattern);   break;
+    case 'equals':      matches = path === pattern;         break;
+    case 'contains':    matches = path.includes(pattern);   break;
+    default:            matches = false;
+  }
+  return filter.negate ? !matches : matches;
+}
+
+function ffwEvalNameFilter(file, filter) {
+  if (!filter.pattern) return true;
+  const name    = filter.caseSensitive ? file.basename : file.basename.toLowerCase();
+  const pattern = filter.caseSensitive ? filter.pattern : filter.pattern.toLowerCase();
+  let matches;
+  switch (filter.matchMode) {
+    case 'contains':    matches = name.includes(pattern);    break;
+    case 'starts-with': matches = name.startsWith(pattern);  break;
+    case 'ends-with':   matches = name.endsWith(pattern);    break;
+    case 'regex':
+      try { matches = new RegExp(filter.pattern, filter.caseSensitive ? '' : 'i').test(file.basename); }
+      catch { matches = false; }
+      break;
+    default: matches = false;
+  }
+  return filter.negate ? !matches : matches;
+}
+
+function ffwApplyFilter(file, cache, filter) {
+  switch (filter.type) {
+    case 'tag':         return ffwEvalTagFilter(cache, filter);
+    case 'frontmatter': return ffwEvalFrontmatterFilter(cache, filter);
+    case 'path':        return ffwEvalPathFilter(file, filter);
+    case 'name':        return ffwEvalNameFilter(file, filter);
+    default:            return true;
+  }
+}
+
+// ── File retrieval & sorting ──────────────────────────────────────────────────
+
+function ffwGetFrontmatterSortValue(app, file, key) {
+  const fm = app.metadataCache.getFileCache(file)?.frontmatter;
+  if (!fm) return undefined;
+  const val = fm[key];
+  if (val == null || val === '') return undefined;
+  return typeof val === 'number' || typeof val === 'string'
+    ? val
+    : Array.isArray(val) ? val.map(ffwFormatValue).join(', ')
+    : ffwFormatValue(val);
+}
+
+function ffwSortFiles(files, app, sort) {
+  const arr = files.slice();
+  switch (sort.field) {
+    case 'created-desc':  return arr.sort((a, b) => b.stat.ctime - a.stat.ctime);
+    case 'created-asc':   return arr.sort((a, b) => a.stat.ctime - b.stat.ctime);
+    case 'modified-desc': return arr.sort((a, b) => b.stat.mtime - a.stat.mtime);
+    case 'modified-asc':  return arr.sort((a, b) => a.stat.mtime - b.stat.mtime);
+    case 'name-asc':      return arr.sort((a, b) => a.basename.localeCompare(b.basename, undefined, { sensitivity: 'base' }));
+    case 'name-desc':     return arr.sort((a, b) => b.basename.localeCompare(a.basename, undefined, { sensitivity: 'base' }));
+    case 'frontmatter-asc':
+    case 'frontmatter-desc': {
+      const key = sort.frontmatterKey;
+      if (!key) return arr;
+      const dir = sort.field === 'frontmatter-asc' ? 1 : -1;
+      return arr.sort((a, b) => {
+        const va = ffwGetFrontmatterSortValue(app, a, key);
+        const vb = ffwGetFrontmatterSortValue(app, b, key);
+        if (va === undefined && vb === undefined) return 0;
+        if (va === undefined) return 1;
+        if (vb === undefined) return -1;
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+        return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' }) * dir;
+      });
+    }
+    default: return arr;
+  }
+}
+
+function ffwGetSectionFiles(app, section) {
+  const files = app.vault.getMarkdownFiles().filter((file) => {
+    const cache = app.metadataCache.getFileCache(file);
+    return section.filters.every((filter) => ffwApplyFilter(file, cache, filter));
+  });
+  const sorted = ffwSortFiles(files, app, section.sort);
+  return section.maxResults && section.maxResults > 0 ? sorted.slice(0, section.maxResults) : sorted;
+}
+
+// ── Section edit modal ────────────────────────────────────────────────────────
+
+class FfwSectionEditModal extends obsidian.Modal {
+  constructor(app, section, onSave) {
+    super(app);
+    this.filtersContainer        = null;
+    this.frontmatterKeyContainer = null;
+    this.isNew    = section === null;
+    this.working  = section
+      ? JSON.parse(JSON.stringify(section))
+      : { id: ffwNewSectionId(), title: '', filters: [ffwDefaultFilter('tag')], sort: ffwDefaultSort(), collapsed: false, maxResults: 0 };
+    this.onSave = onSave;
+  }
+
+  onOpen() {
+    const { contentEl, titleEl } = this;
+    contentEl.addClass('ffw-modal');
+    titleEl.setText(this.isNew ? 'Add filter section' : 'Edit filter section');
+
+    new obsidian.Setting(contentEl)
+      .setName('Title')
+      .setDesc('Shown as the section header in the widget.')
+      .addText((text) => text
+        .setPlaceholder('Active projects')
+        .setValue(this.working.title)
+        .onChange((v) => { this.working.title = v; })
+      );
+
+    contentEl.createEl('h3', { text: 'Filters' });
+    contentEl.createEl('p', { cls: 'setting-item-description', text: 'All filters must match. Add as many rows as you need.' });
+
+    this.filtersContainer = contentEl.createDiv({ cls: 'ffw-filter-rows' });
+    this.renderFilterRows();
+
+    // Add-filter buttons
+    const addRow = contentEl.createDiv({ cls: 'ffw-add-filter-row' });
+    for (const type of ['tag', 'frontmatter', 'path', 'name']) {
+      new obsidian.ButtonComponent(addRow)
+        .setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`)
+        .onClick(() => {
+          this.working.filters.push(ffwDefaultFilter(type));
+          this.renderFilterRows();
+        });
+    }
+
+    contentEl.createEl('h3', { text: 'Sort' });
+
+    new obsidian.Setting(contentEl)
+      .setName('Sort by')
+      .addDropdown((dd) => {
+        for (const opt of FFW_SORT_OPTIONS) dd.addOption(opt.value, opt.label);
+        dd.setValue(this.working.sort.field)
+          .onChange((v) => {
+            this.working.sort.field = v;
+            this.updateFrontmatterKeyVisibility();
+          });
+      });
+
+    this.frontmatterKeyContainer = contentEl.createDiv();
+    new obsidian.Setting(this.frontmatterKeyContainer)
+      .setName('Frontmatter sort key')
+      .setDesc('Required when sorting by a frontmatter field.')
+      .addText((text) => text
+        .setPlaceholder('Due')
+        .setValue(this.working.sort.frontmatterKey ?? '')
+        .onChange((v) => { this.working.sort.frontmatterKey = v.trim() || undefined; })
+      );
+    this.updateFrontmatterKeyVisibility();
+
+    new obsidian.Setting(contentEl)
+      .setName('Result limit')
+      .setDesc('Maximum number of files to show. 0 means unlimited.')
+      .addText((text) => text
+        .setPlaceholder('0')
+        .setValue(String(this.working.maxResults))
+        .onChange((v) => {
+          const n = parseInt(v, 10);
+          this.working.maxResults = Number.isFinite(n) && n > 0 ? n : 0;
+        })
+      );
+
+    const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
+    new obsidian.ButtonComponent(btnRow).setButtonText('Cancel').onClick(() => this.close());
+    new obsidian.ButtonComponent(btnRow)
+      .setButtonText(this.isNew ? 'Add section' : 'Save')
+      .setCta()
+      .onClick(() => this.handleSave());
+  }
+
+  onClose() { this.contentEl.empty(); }
+
+  updateFrontmatterKeyVisibility() {
+    if (!this.frontmatterKeyContainer) return;
+    const show = this.working.sort.field === 'frontmatter-asc' || this.working.sort.field === 'frontmatter-desc';
+    this.frontmatterKeyContainer.style.display = show ? '' : 'none';
+  }
+
+  renderFilterRows() {
+    if (!this.filtersContainer) return;
+    this.filtersContainer.empty();
+    if (this.working.filters.length === 0) {
+      this.filtersContainer.createEl('p', { cls: 'setting-item-description ffw-empty', text: 'No filters yet — add one below.' });
+      return;
+    }
+    this.working.filters.forEach((filter, idx) => {
+      const row = this.filtersContainer.createDiv({ cls: 'ffw-filter-row' });
+
+      const typeSelect = row.createEl('select', { cls: 'dropdown ffw-type-select' });
+      for (const [val, label] of Object.entries(FFW_FILTER_TYPE_LABELS)) {
+        const opt = typeSelect.createEl('option', { value: val, text: label });
+        if (val === filter.type) opt.selected = true;
+      }
+      typeSelect.addEventListener('change', () => {
+        if (typeSelect.value !== filter.type) {
+          this.working.filters[idx] = ffwDefaultFilter(typeSelect.value);
+          this.renderFilterRows();
+        }
+      });
+
+      const inputsEl = row.createDiv({ cls: 'ffw-filter-inputs' });
+      this.renderFilterInputs(inputsEl, filter, idx);
+
+      const removeBtn = row.createEl('button', { text: '✕', cls: 'ffw-filter-remove' });
+      removeBtn.setAttribute('aria-label', 'Remove filter');
+      removeBtn.addEventListener('click', () => {
+        this.working.filters.splice(idx, 1);
+        this.renderFilterRows();
+      });
+    });
+  }
+
+  renderFilterInputs(el, filter, idx) {
+    switch (filter.type) {
+      case 'tag':         this.renderTagInputs(el, filter, idx);         break;
+      case 'frontmatter': this.renderFrontmatterInputs(el, filter, idx); break;
+      case 'path':        this.renderPathInputs(el, filter, idx);        break;
+      case 'name':        this.renderNameInputs(el, filter, idx);        break;
+    }
+  }
+
+  renderTagInputs(el, filter, idx) {
+    const modeSelect = el.createEl('select', { cls: 'dropdown' });
+    const inclOpt = modeSelect.createEl('option', { value: 'include', text: 'Has tag' });
+    const exclOpt = modeSelect.createEl('option', { value: 'exclude', text: 'Does not have tag' });
+    (filter.include ? inclOpt : exclOpt).selected = true;
+    modeSelect.addEventListener('change', () => {
+      this.working.filters[idx].include = modeSelect.value === 'include';
+    });
+    const tagInput = el.createEl('input', { type: 'text', placeholder: 'e.g. project', value: filter.tag, cls: 'ffw-text-input' });
+    tagInput.addEventListener('input', () => { this.working.filters[idx].tag = tagInput.value; });
+  }
+
+  renderFrontmatterInputs(el, filter, idx) {
+    const keyInput = el.createEl('input', { type: 'text', placeholder: 'key', value: filter.key, cls: 'ffw-text-input' });
+    keyInput.addEventListener('input', () => { this.working.filters[idx].key = keyInput.value; });
+
+    const compSelect = el.createEl('select', { cls: 'dropdown' });
+    for (const { v, label } of [{ v: 'equals', label: '=' }, { v: 'not-equals', label: '≠' }, { v: 'contains', label: 'contains' }, { v: 'exists', label: 'exists' }]) {
+      const opt = compSelect.createEl('option', { value: v, text: label });
+      if (v === filter.comparison) opt.selected = true;
+    }
+
+    const valInput = el.createEl('input', { type: 'text', placeholder: 'value', value: filter.value, cls: 'ffw-text-input' });
+    valInput.disabled = filter.comparison === 'exists';
+    valInput.addEventListener('input', () => { this.working.filters[idx].value = valInput.value; });
+    compSelect.addEventListener('change', () => {
+      const comp = compSelect.value;
+      this.working.filters[idx].comparison = comp;
+      valInput.disabled = comp === 'exists';
+    });
+  }
+
+  renderPathInputs(el, filter, idx) {
+    const negateSelect = el.createEl('select', { cls: 'dropdown' });
+    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
+    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected = filter.negate;
+    negateSelect.addEventListener('change', () => {
+      this.working.filters[idx].negate = negateSelect.value === 'is-not';
+    });
+
+    const modeSelect = el.createEl('select', { cls: 'dropdown' });
+    for (const { v, label } of [{ v: 'starts-with', label: 'starts with' }, { v: 'contains', label: 'contains' }, { v: 'equals', label: 'equals' }, { v: 'ends-with', label: 'ends with' }]) {
+      const opt = modeSelect.createEl('option', { value: v, text: label });
+      if (v === filter.matchMode) opt.selected = true;
+    }
+    modeSelect.addEventListener('change', () => { this.working.filters[idx].matchMode = modeSelect.value; });
+
+    const patInput = el.createEl('input', { type: 'text', placeholder: 'e.g. Work/', value: filter.pattern, cls: 'ffw-text-input' });
+    patInput.addEventListener('input', () => { this.working.filters[idx].pattern = patInput.value; });
+  }
+
+  renderNameInputs(el, filter, idx) {
+    const negateSelect = el.createEl('select', { cls: 'dropdown' });
+    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
+    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected = filter.negate;
+    negateSelect.addEventListener('change', () => {
+      this.working.filters[idx].negate = negateSelect.value === 'is-not';
+    });
+
+    const modeSelect = el.createEl('select', { cls: 'dropdown' });
+    for (const { v, label } of [{ v: 'contains', label: 'contains' }, { v: 'starts-with', label: 'starts with' }, { v: 'ends-with', label: 'ends with' }, { v: 'regex', label: 'regex' }]) {
+      const opt = modeSelect.createEl('option', { value: v, text: label });
+      if (v === filter.matchMode) opt.selected = true;
+    }
+    modeSelect.addEventListener('change', () => { this.working.filters[idx].matchMode = modeSelect.value; });
+
+    const patInput = el.createEl('input', { type: 'text', placeholder: 'pattern', value: filter.pattern, cls: 'ffw-text-input' });
+    patInput.addEventListener('input', () => { this.working.filters[idx].pattern = patInput.value; });
+
+    const caseLbl   = el.createEl('label', { cls: 'ffw-checkbox' });
+    const caseCheck = caseLbl.createEl('input', { type: 'checkbox' });
+    caseCheck.checked = filter.caseSensitive;
+    caseLbl.appendChild(document.createTextNode(' case sensitive'));
+    caseCheck.addEventListener('change', () => { this.working.filters[idx].caseSensitive = caseCheck.checked; });
+  }
+
+  handleSave() {
+    const title = this.working.title.trim();
+    if (!title) { new obsidian.Notice('Please enter a title for the section.'); return; }
+    if (this.working.filters.length === 0) { new obsidian.Notice('Add at least one filter to the section.'); return; }
+    if ((this.working.sort.field === 'frontmatter-asc' || this.working.sort.field === 'frontmatter-desc') && !this.working.sort.frontmatterKey) {
+      new obsidian.Notice('Please specify a frontmatter key to sort by.'); return;
+    }
+    this.working.title = title;
+    this.onSave(this.working);
+    this.close();
+  }
+}
+
+// ── Filtered Files Widget view ────────────────────────────────────────────────
+
+class FilteredFilesWidgetView extends obsidian.ItemView {
+  constructor(leaf, plugin) {
+    super(leaf);
+    this.query        = '';
+    this.rootEl       = null;
+    this.sectionsEl   = null;
+    this.dragSourceId = null;
+    this.refresh      = obsidian.debounce(() => this.render(), 80, true);
+    this.plugin       = plugin;
+  }
+
+  getViewType()    { return FFW_VIEW_TYPE; }
+  getDisplayText() { return 'Filtered files'; }
+  getIcon()        { return 'file-sliders'; }
+
+  async onOpen() {
+    this.rootEl = this.containerEl.children[1];
+    this.rootEl.empty();
+    this.rootEl.addClass('ffw-root');
+    this.registerEvent(this.app.metadataCache.on('resolved', () => this.refresh()));
+    this.registerEvent(this.app.metadataCache.on('changed',  () => this.refresh()));
+    this.registerEvent(this.app.vault.on('create', () => this.refresh()));
+    this.registerEvent(this.app.vault.on('delete', () => this.refresh()));
+    this.registerEvent(this.app.vault.on('rename', () => this.refresh()));
+    this.registerEvent(this.app.workspace.on('iconic:icon-changed', () => this.refresh()));
+    this.render();
+  }
+
+  async onClose() { this.containerEl.empty(); }
+
+  render() {
+    if (!this.rootEl) return;
+    this.rootEl.empty();
+    this.renderHeader(this.rootEl);
+    this.sectionsEl = this.rootEl.createDiv({ cls: 'ffw-sections' });
+    this.renderSections();
+  }
+
+  renderHeader(el) {
+    const row    = el.createDiv({ cls: 'ffw-header' }).createDiv({ cls: 'ffw-search-row' });
+    const search = new obsidian.SearchComponent(row);
+    search.setPlaceholder('Filter...');
+    search.setValue(this.query);
+    search.onChange((v) => { this.query = v; this.renderSections(); });
+
+    const addBtn = row.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Add filter section' } });
+    obsidian.setIcon(addBtn, 'plus');
+    addBtn.addEventListener('click', () => this.openAddModal());
+  }
+
+  renderSections() {
+    if (!this.sectionsEl) return;
+    this.sectionsEl.empty();
+    const sections = this.plugin.settings.ffwSections;
+    if (sections.length === 0) {
+      const empty = this.sectionsEl.createDiv({ cls: 'ffw-empty-state' });
+      empty.createEl('p', { text: 'No filter sections yet.' });
+      empty.createEl('p', { cls: 'setting-item-description', text: 'Use the + button above to create your first filter section.' });
+      return;
+    }
+    sections.forEach((section) => this.renderSection(section));
+  }
+
+  renderSection(section) {
+    if (!this.sectionsEl) return;
+
+    const sectionEl = this.sectionsEl.createDiv({ cls: 'ffw-section' });
+    sectionEl.dataset.sectionId = section.id;
+    if (section.collapsed) sectionEl.addClass('is-collapsed');
+    sectionEl.setAttr('draggable', 'true');
+    sectionEl.addEventListener('dragstart', (e) => this.handleDragStart(e, section.id));
+    sectionEl.addEventListener('dragover',  (e) => this.handleDragOver(e, sectionEl));
+    sectionEl.addEventListener('dragleave', ()  => sectionEl.removeClass('is-drag-over'));
+    sectionEl.addEventListener('drop',      (e) => this.handleDrop(e, section.id, sectionEl));
+    sectionEl.addEventListener('dragend',   ()  => this.clearDragState());
+
+    const header = sectionEl.createDiv({ cls: 'ffw-section-header' });
+
+    const dragHandle = header.createSpan({ cls: 'ffw-drag-handle' });
+    obsidian.setIcon(dragHandle, 'grip-vertical');
+    dragHandle.setAttr('aria-label', 'Drag to reorder');
+
+    const collapseToggle = header.createSpan({ cls: 'ffw-collapse-toggle' });
+    obsidian.setIcon(collapseToggle, section.collapsed ? 'chevron-right' : 'chevron-down');
+    collapseToggle.setAttr('aria-label', section.collapsed ? 'Expand section' : 'Collapse section');
+    collapseToggle.addEventListener('click', (e) => { e.stopPropagation(); this.toggleCollapse(section); });
+
+    const titleWrap = header.createDiv({ cls: 'ffw-section-title-wrap' });
+    titleWrap.createEl('div', { cls: 'ffw-section-title', text: section.title });
+    titleWrap.createEl('div', {
+      cls:  'ffw-section-meta',
+      text: `${section.filters.length} filter${section.filters.length === 1 ? '' : 's'} · ${ffwSortLabel(section.sort)}`,
+    });
+    titleWrap.addEventListener('click', () => this.toggleCollapse(section));
+
+    const controls = header.createDiv({ cls: 'ffw-section-controls' });
+    this.addIconButton(controls, 'more-vertical', 'More actions', (e) => this.openSectionMenu(section, e));
+
+    const body = sectionEl.createDiv({ cls: 'ffw-section-body' });
+    if (!section.collapsed) {
+      try {
+        const files    = ffwGetSectionFiles(this.app, section);
+        const filtered = this.query
+          ? files.filter((f) => ffwFuzzyMatch(this.query, f.basename) || ffwFuzzyMatch(this.query, f.path))
+          : files;
+
+        if (filtered.length === 0) {
+          body.createDiv({ cls: 'ffw-no-results', text: this.query ? 'No files match the search.' : 'No files match the filters.' });
+          return;
+        }
+
+        const list = body.createDiv({ cls: 'ffw-file-list' });
+        filtered.forEach((f) => this.renderFileRow(list, f));
+
+        if (files.length > filtered.length) {
+          body.createDiv({ cls: 'ffw-truncated', text: `${files.length - filtered.length} hidden by search` });
+        }
+      } catch (err) {
+        body.createDiv({ cls: 'ffw-error', text: `Error rendering section: ${err.message}` });
+      }
+    }
+  }
+
+  renderFileRow(el, file) {
+    const row    = el.createDiv({ cls: 'ffw-file-row' });
+    const iconEl = row.createSpan({ cls: 'ffw-file-icon' });
+
+    const iconicIcon = ffwGetIconicIcon(this.app, file);
+    if (iconicIcon?.icon) {
+      ffwSetIconEl(iconEl, iconicIcon.icon, iconicIcon.color ?? null);
+    } else {
+      obsidian.setIcon(iconEl, 'file-text');
+    }
+
+    const labelEl    = row.createDiv({ cls: 'ffw-file-label' });
+    const key        = this.plugin.settings.ffwDisplayNameKey;
+    const fmCache    = key ? this.app.metadataCache.getFileCache(file)?.frontmatter : null;
+    const displayName = (key && fmCache?.[key] != null) ? String(fmCache[key]) : file.basename;
+    labelEl.createDiv({ cls: 'ffw-file-name', text: displayName });
+
+    const folder = file.parent?.path && file.parent.path !== '/' ? file.parent.path : '';
+    if (folder) labelEl.createDiv({ cls: 'ffw-file-path', text: folder });
+
+    row.addEventListener('click', (e) => {
+      this.app.workspace.openLinkText(file.path, '', e.ctrlKey || e.metaKey);
+    });
+
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const menu = new obsidian.Menu();
+      menu.addItem((item) => item.setTitle('Open').setIcon('file-text')
+        .onClick(() => this.app.workspace.openLinkText(file.path, '', false)));
+      menu.addItem((item) => item.setTitle('Open in new tab').setIcon('file-plus')
+        .onClick(() => this.app.workspace.openLinkText(file.path, '', true)));
+      menu.addItem((item) => item.setTitle('Reveal in file explorer').setIcon('folder')
+        .onClick(() => {
+          const fe   = this.app.internalPlugins?.getPluginById?.('file-explorer');
+          const inst = fe?.instance;
+          if (inst?.revealInFolder) {
+            try { inst.revealInFolder(file); return; } catch {}
+          }
+          new obsidian.Notice('Could not reveal file in the file explorer.');
+        }));
+      menu.showAtMouseEvent(e);
+    });
+  }
+
+  addIconButton(el, icon, label, onClick) {
+    const btn = el.createEl('button', { cls: 'clickable-icon' });
+    obsidian.setIcon(btn, icon);
+    btn.setAttr('aria-label', label);
+    btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
+  }
+
+  openSectionMenu(section, e) {
+    const menu = new obsidian.Menu();
+    menu.addItem((item) => item.setTitle('Edit').setIcon('pencil').onClick(() => this.openEditModal(section)));
+    menu.addItem((item) => item.setTitle('Duplicate').setIcon('copy').onClick(() => this.duplicateSection(section)));
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle('Delete section').setIcon('trash').onClick(() => this.deleteSection(section.id)));
+    menu.showAtMouseEvent(e);
+  }
+
+  openAddModal() {
+    new FfwSectionEditModal(this.app, null, (section) => {
+      this.plugin.settings.ffwSections.push(section);
+      this.persistAndRender();
+    }).open();
+  }
+
+  openEditModal(section) {
+    new FfwSectionEditModal(this.app, section, (updated) => {
+      const idx = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
+      if (idx >= 0) {
+        this.plugin.settings.ffwSections[idx] = updated;
+        this.persistAndRender();
+      }
+    }).open();
+  }
+
+  async persistAndRender() {
+    await this.plugin.saveSettings();
+    this.renderSections();
+  }
+
+  async toggleCollapse(section) {
+    section.collapsed = !section.collapsed;
+    await this.plugin.saveSettings();
+    this.renderSections();
+  }
+
+  async duplicateSection(section) {
+    const copy  = JSON.parse(JSON.stringify(section));
+    copy.id     = ffwNewSectionId();
+    copy.title  = `${section.title} (copy)`;
+    const idx   = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
+    this.plugin.settings.ffwSections.splice(idx + 1, 0, copy);
+    await this.plugin.saveSettings();
+    this.renderSections();
+  }
+
+  async deleteSection(id) {
+    const sections = this.plugin.settings.ffwSections;
+    const idx      = sections.findIndex((s) => s.id === id);
+    if (idx < 0) return;
+    const [removed] = sections.splice(idx, 1);
+    await this.plugin.saveSettings();
+    this.renderSections();
+    if (removed) new obsidian.Notice(`Removed "${removed.title}"`);
+  }
+
+  // ── Drag-and-drop reorder ─────────────────────────────────────────────────────
+
+  handleDragStart(e, id) {
+    this.dragSourceId = id;
+    if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); }
+  }
+
+  handleDragOver(e, el) {
+    if (!this.dragSourceId) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    el.addClass('is-drag-over');
+  }
+
+  async handleDrop(e, targetId, el) {
+    e.preventDefault();
+    el.removeClass('is-drag-over');
+    const sourceId = this.dragSourceId;
+    this.dragSourceId = null;
+    if (!sourceId || sourceId === targetId) return;
+
+    const sections = this.plugin.settings.ffwSections;
+    const fromIdx  = sections.findIndex((s) => s.id === sourceId);
+    const toIdx    = sections.findIndex((s) => s.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const [moved] = sections.splice(fromIdx, 1);
+    if (!moved) return;
+    const newIdx = sections.findIndex((s) => s.id === targetId);
+    sections.splice(newIdx < 0 ? sections.length : newIdx, 0, moved);
+    await this.plugin.saveSettings();
+    this.renderSections();
+  }
+
+  clearDragState() {
+    this.dragSourceId = null;
+    this.containerEl.querySelectorAll('.ffw-section.is-drag-over')
+      .forEach((el) => el.classList.remove('is-drag-over'));
+  }
+}
+
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
 
 class MyPluginSettingTab extends obsidian.PluginSettingTab {
@@ -973,6 +1725,44 @@ class MyPluginSettingTab extends obsidian.PluginSettingTab {
         this.renderObjectTypeRow(objTypesList, i);
       }
     }
+
+    containerEl.createEl('hr', { cls: 'ffc-divider' });
+
+    // ── Filtered Files Widget ─────────────────────────────────────────────────
+    containerEl.createEl('h2', { text: 'Filtered Files Widget' });
+    containerEl.createEl('p', {
+      text: 'A sidebar panel that shows lists of files matching configurable filter rules. Filter sections are managed directly inside the widget — open it and click + to create your first section.',
+      cls: 'ffc-settings-desc',
+    });
+
+    new obsidian.Setting(containerEl)
+      .setName('Open the widget')
+      .setDesc('Reveal the filtered files widget in the left sidebar.')
+      .addButton((btn) => btn.setButtonText('Open widget').setCta().onClick(() => {
+        this.plugin.activateWidgetView();
+      }));
+
+    new obsidian.Setting(containerEl)
+      .setName('Display name frontmatter key')
+      .setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.')
+      .addText((text) => text
+        .setPlaceholder('e.g. title')
+        .setValue(this.plugin.settings.ffwDisplayNameKey)
+        .onChange(async (v) => {
+          this.plugin.settings.ffwDisplayNameKey = v.trim();
+          await this.plugin.saveSettings();
+          this.plugin.refreshWidgetViews();
+        })
+      );
+
+    new obsidian.Setting(containerEl)
+      .setName('Reset all filter sections')
+      .setDesc('Remove every filter section from the widget. This cannot be undone.')
+      .addButton((btn) => btn.setButtonText('Reset').setWarning().onClick(async () => {
+        this.plugin.settings.ffwSections = [];
+        await this.plugin.saveSettings();
+        this.plugin.refreshWidgetViews();
+      }));
 
   }
 
@@ -1974,6 +2764,15 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
 
     this.addSettingTab(new MyPluginSettingTab(this.app, this));
 
+    // ── Filtered Files Widget ─────────────────────────────────────────────────
+    this.registerView(FFW_VIEW_TYPE, (leaf) => new FilteredFilesWidgetView(leaf, this));
+    this.addRibbonIcon('file-sliders', 'Open filtered files widget', () => this.activateWidgetView());
+    this.addCommand({
+      id:       'ffc-open-filtered-files-widget',
+      name:     'Open filtered files widget',
+      callback: () => this.activateWidgetView(),
+    });
+
     for (const cmd of this.settings.commands) this.registerFilterCommand(cmd);
     for (const obj of this.settings.objectTypes) {
       this.registerObjectTypeCommand(obj);
@@ -2230,6 +3029,27 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
 
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup',   onMouseUp);
+    });
+  }
+
+  // ── Filtered Files Widget helpers ─────────────────────────────────────────────
+
+  async activateWidgetView() {
+    const { workspace } = this.app;
+    let leaf = workspace.getLeavesOfType(FFW_VIEW_TYPE)[0] ?? null;
+    if (!leaf) {
+      const newLeaf = workspace.getLeftLeaf(false);
+      if (newLeaf) {
+        await newLeaf.setViewState({ type: FFW_VIEW_TYPE, active: true });
+        leaf = newLeaf;
+      }
+    }
+    if (leaf) await workspace.revealLeaf(leaf);
+  }
+
+  refreshWidgetViews() {
+    this.app.workspace.getLeavesOfType(FFW_VIEW_TYPE).forEach((leaf) => {
+      if (leaf.view instanceof FilteredFilesWidgetView) leaf.view.render();
     });
   }
 
@@ -2569,6 +3389,16 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
     if (!this.settings.objectTypes) this.settings.objectTypes = [];
     if (this.settings.templatesFolder === undefined) this.settings.templatesFolder = '';
     if (this.settings.triggerKey === undefined) this.settings.triggerKey = '';
+
+    // Filtered Files Widget — initialise and validate
+    if (!Array.isArray(this.settings.ffwSections)) this.settings.ffwSections = [];
+    if (this.settings.ffwDisplayNameKey === undefined) this.settings.ffwDisplayNameKey = '';
+    // Strip any malformed section objects that would cause render errors
+    this.settings.ffwSections = this.settings.ffwSections.filter((s) =>
+      s && typeof s === 'object' &&
+      typeof s.id === 'string' && typeof s.title === 'string' &&
+      Array.isArray(s.filters) && !!s.sort
+    );
 
     // Build the set of slugs already assigned so we can guarantee uniqueness
     const takenSlugs = new Set(
