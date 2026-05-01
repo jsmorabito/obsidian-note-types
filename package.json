@@ -1,0 +1,24 @@
+{
+  "name": "obsidian-objects",
+  "version": "1.4.3",
+  "description": "Define custom object types with creation commands, filtered file pickers, hover previews, and a sidebar widget.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit -p tsconfig.json && node esbuild.config.mjs production",
+    "lint": "eslint src/"
+  },
+  "keywords": [],
+  "author": "John Morabito",
+  "license": "MIT",
+  "devDependencies": {
+    "@codemirror/state": "^6.0.0",
+    "@codemirror/view": "^6.0.0",
+    "@types/node": "^16.11.6",
+    "builtin-modules": "^3.3.0",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "^5.9.3"
+  }
+}

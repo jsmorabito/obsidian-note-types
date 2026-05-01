@@ -1,798 +1,574 @@
-/* Objects – Obsidian Plugin */
-'use strict';
-
-const obsidian = require('obsidian');
-const { ViewPlugin, Decoration } = require('@codemirror/view');
-const { RangeSetBuilder } = require('@codemirror/state');
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Convert an object type name to a stable command slug.
- * e.g. "My Task" → "my-task", "  Hello World! " → "hello-world"
- */
-function nameToCommandSlug(name) {
-  return (name || 'object')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    || 'object';
-}
-
-// ─── Default Settings ─────────────────────────────────────────────────────────
-
-const DEFAULT_SETTINGS = {
-  commands: [],
-  objectTypes: [],
-  templatesFolder: '',
-  triggerKey: '',
-  // Filtered Files Widget
-  ffwSections: [],
-  ffwDisplayNameKey: '',
+"use strict";
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
 };
-
-// ─── Filtered File Modal ──────────────────────────────────────────────────────
-
-class FilteredFileModal extends obsidian.FuzzySuggestModal {
-  constructor(app, files, typeName) {
-    super(app);
-    this.files = files;
-    this.setPlaceholder(typeName ? `Search ${typeName}…` : 'Type to search filtered files…');
-    this.setInstructions([
-      { command: '↑↓', purpose: 'navigate' },
-      { command: '↵', purpose: 'open' },
-      { command: 'esc', purpose: 'dismiss' },
-    ]);
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
   }
+  return to;
+};
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  getItems() { return this.files; }
+// src/main.ts
+var main_exports = {};
+__export(main_exports, {
+  FilteredFileCommandsPlugin: () => FilteredFileCommandsPlugin,
+  default: () => main_default
+});
+module.exports = __toCommonJS(main_exports);
+var import_obsidian14 = require("obsidian");
 
-  getTitle(file) {
-    const cache = this.app.metadataCache.getFileCache(file);
-    const title = cache?.frontmatter?.title;
-    return title ? String(title) : file.basename;
-  }
+// src/settings.ts
+var import_obsidian5 = require("obsidian");
 
-  getItemText(file) { return this.getTitle(file); }
+// src/ui/object-type-settings-modal.ts
+var import_obsidian3 = require("obsidian");
 
-  renderSuggestion(match, el) {
-    const file = match.item;
-    // el is already .suggestion-item — use Obsidian's built-in suggestion classes
-    el.createEl('span', { text: this.getTitle(file), cls: 'suggestion-title' });
-    const folder = file.parent?.path;
-    if (folder && folder !== '/') {
-      el.createEl('span', { text: folder, cls: 'suggestion-note' });
-    }
-  }
+// src/utils/helpers.ts
+var import_obsidian2 = require("obsidian");
 
-  onChooseItem(file) { this.app.workspace.getLeaf(false).openFile(file); }
-}
-
-// ─── Frontmatter Value Suggest ────────────────────────────────────────────────
-//
-// Custom lightweight autocomplete dropdown for frontmatter fields.
-// Built from scratch instead of AbstractInputSuggest so we have full control
-// over keyboard/mouse handling inside Obsidian modals.
-
-class FrontmatterValueSuggest {
+// src/ui/frontmatter-value-suggest.ts
+var import_obsidian = require("obsidian");
+var FrontmatterValueSuggest = class {
   constructor(app, inputEl, key, fieldType) {
+    this.dropdown = null;
+    this.suggestions = [];
+    this.selectedIndex = -1;
     this.app = app;
     this.inputEl = inputEl;
     this.key = key;
     this.fieldType = fieldType;
-    this.dropdown = null;
-    this.suggestions = [];
-    this.selectedIndex = -1;
-
-    this._onInput   = () => this.refresh();
-    this._onFocus   = () => this.refresh();
-    this._onBlur    = () => setTimeout(() => this.close(), 150);
+    this._onInput = () => this.refresh();
+    this._onFocus = () => this.refresh();
+    this._onBlur = () => setTimeout(() => this.close(), 150);
     this._onKeydown = (e) => this.handleKeydown(e);
-
-    inputEl.addEventListener('input',   this._onInput);
-    inputEl.addEventListener('focus',   this._onFocus);
-    inputEl.addEventListener('blur',    this._onBlur);
-    inputEl.addEventListener('keydown', this._onKeydown);
+    inputEl.addEventListener("input", this._onInput);
+    inputEl.addEventListener("focus", this._onFocus);
+    inputEl.addEventListener("blur", this._onBlur);
+    inputEl.addEventListener("keydown", this._onKeydown);
   }
-
-  // ── Data ─────────────────────────────────────────────────────────────────────
-
+  // ── Data ──────────────────────────────────────────────────────────────────────
   getVaultValues() {
-    const values = new Set();
-    if (this.key === 'tags' || this.key === 'tag') {
-      const tags = this.app.metadataCache.getTags() ?? {};
+    var _a, _b, _c;
+    const values = /* @__PURE__ */ new Set();
+    if (this.key === "tags" || this.key === "tag") {
+      const tags = (_a = this.app.metadataCache.getTags()) != null ? _a : {};
       for (const tag of Object.keys(tags)) {
-        values.add(tag.startsWith('#') ? tag.slice(1) : tag);
+        values.add(tag.startsWith("#") ? tag.slice(1) : tag);
       }
     }
     for (const file of this.app.vault.getMarkdownFiles()) {
-      const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.[this.key];
-      if (raw == null) continue;
-      if (Array.isArray(raw)) raw.forEach((v) => { if (v != null) values.add(String(v).trim()); });
-      else { const s = String(raw).trim(); if (s) values.add(s); }
+      const raw = (_c = (_b = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _b.frontmatter) == null ? void 0 : _c[this.key];
+      if (raw == null)
+        continue;
+      if (Array.isArray(raw)) {
+        raw.forEach((v) => {
+          if (v != null)
+            values.add(String(v).trim());
+        });
+      } else {
+        const s = String(raw).trim();
+        if (s)
+          values.add(s);
+      }
     }
-    return [...values].filter(Boolean)
-      .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    return [...values].filter(Boolean).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   }
-
   activeTerm() {
-    return this.fieldType === 'list'
-      ? this.inputEl.value.split(',').pop().trim()
-      : this.inputEl.value.trim();
+    var _a;
+    return this.fieldType === "list" ? ((_a = this.inputEl.value.split(",").pop()) != null ? _a : "").trim() : this.inputEl.value.trim();
   }
-
   alreadyEntered() {
-    if (this.fieldType !== 'list') return [];
-    return this.inputEl.value.split(',').slice(0, -1).map((s) => s.trim().toLowerCase());
+    if (this.fieldType !== "list")
+      return [];
+    return this.inputEl.value.split(",").slice(0, -1).map((s) => s.trim().toLowerCase());
   }
-
   // ── Selection ─────────────────────────────────────────────────────────────────
-
   select(value) {
-    if (this.fieldType === 'list') {
-      const parts = this.inputEl.value.split(',');
+    if (this.fieldType === "list") {
+      const parts = this.inputEl.value.split(",");
       parts[parts.length - 1] = value;
-      this.inputEl.value = parts.map((s) => s.trim()).join(', ');
+      this.inputEl.value = parts.map((s) => s.trim()).join(", ");
     } else {
       this.inputEl.value = value;
     }
-    this.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+    this.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     this.close();
     this.inputEl.focus();
   }
-
   // ── Keyboard ──────────────────────────────────────────────────────────────────
-
   handleKeydown(e) {
-    if (!this.dropdown) return;
-
-    if (e.key === 'ArrowDown') {
+    if (!this.dropdown)
+      return;
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       this.selectedIndex = Math.min(this.selectedIndex + 1, this.suggestions.length - 1);
       this.updateHighlight();
-    } else if (e.key === 'ArrowUp') {
+    } else if (e.key === "ArrowUp") {
       e.preventDefault();
       this.selectedIndex = Math.max(this.selectedIndex - 1, 0);
       this.updateHighlight();
-    } else if (e.key === 'Enter') {
+    } else if (e.key === "Enter") {
       if (this.selectedIndex >= 0) {
-        // A suggestion is highlighted — select it and swallow the event so
-        // the modal's submit handler doesn't fire.
         e.preventDefault();
         e.stopImmediatePropagation();
         this.select(this.suggestions[this.selectedIndex]);
       }
-      // If nothing is highlighted, fall through so the modal can submit.
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       this.close();
     }
   }
-
   // ── Dropdown UI ───────────────────────────────────────────────────────────────
-
   refresh() {
-    const term    = this.activeTerm().toLowerCase();
+    const term = this.activeTerm().toLowerCase();
     const entered = this.alreadyEntered();
-    const matches = this.getVaultValues().filter((v) =>
-      v.toLowerCase().includes(term) && !entered.includes(v.toLowerCase())
+    const matches = this.getVaultValues().filter(
+      (v) => v.toLowerCase().includes(term) && !entered.includes(v.toLowerCase())
     );
-
     if (matches.length === 0 || document.activeElement !== this.inputEl) {
-      this.close(); return;
+      this.close();
+      return;
     }
-
-    this.suggestions    = matches;
-    this.selectedIndex  = -1;
-
-    // Reuse or create the dropdown element
+    this.suggestions = matches;
+    this.selectedIndex = -1;
     if (!this.dropdown) {
-      this.dropdown = document.createElement('div');
-      this.dropdown.className = 'suggestion-container ffc-suggest-dropdown';
+      this.dropdown = document.createElement("div");
+      this.dropdown.className = "suggestion-container ffc-suggest-dropdown";
       document.body.appendChild(this.dropdown);
     }
     this.dropdown.empty();
-
     const rect = this.inputEl.getBoundingClientRect();
     Object.assign(this.dropdown.style, {
-      position:  'fixed',
-      top:       `${rect.bottom + 4}px`,
-      left:      `${rect.left}px`,
-      width:     `${rect.width}px`,
-      zIndex:    '9999',
-      maxHeight: '200px',
-      overflowY: 'auto',
+      position: "fixed",
+      top: `${rect.bottom + 4}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      zIndex: "9999",
+      maxHeight: "200px",
+      overflowY: "auto"
     });
-
     matches.forEach((value, i) => {
       const isLink = /^\[\[.*\]\]$/.test(value);
       const displayText = isLink ? value.slice(2, -2) : value;
-
-      const item = this.dropdown.createDiv({ cls: 'suggestion-item ffc-suggest-item' });
-      item.createSpan({ cls: 'ffc-suggest-label', text: displayText });
+      const item = this.dropdown.createDiv({ cls: "suggestion-item ffc-suggest-item" });
+      item.createSpan({ cls: "ffc-suggest-label", text: displayText });
       if (isLink) {
-        const icon = item.createSpan({ cls: 'ffc-suggest-link-icon' });
-        obsidian.setIcon(icon, 'link');
+        const icon = item.createSpan({ cls: "ffc-suggest-link-icon" });
+        (0, import_obsidian.setIcon)(icon, "link");
       }
-      // mousedown + preventDefault keeps focus on the input (avoids blur-before-click)
-      item.addEventListener('mousedown', (e) => { e.preventDefault(); });
-      item.addEventListener('click',     ()  => { this.select(value); });
-      item.addEventListener('mouseover', ()  => {
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+      });
+      item.addEventListener("click", () => {
+        this.select(value);
+      });
+      item.addEventListener("mouseover", () => {
         this.selectedIndex = i;
         this.updateHighlight();
       });
     });
   }
-
   updateHighlight() {
-    if (!this.dropdown) return;
-    this.dropdown.querySelectorAll('.suggestion-item').forEach((el, i) => {
-      el.classList.toggle('is-selected', i === this.selectedIndex);
+    if (!this.dropdown)
+      return;
+    this.dropdown.querySelectorAll(".suggestion-item").forEach((el, i) => {
+      el.classList.toggle("is-selected", i === this.selectedIndex);
     });
   }
-
   close() {
-    if (this.dropdown) { this.dropdown.remove(); this.dropdown = null; }
-    this.suggestions   = [];
+    if (this.dropdown) {
+      this.dropdown.remove();
+      this.dropdown = null;
+    }
+    this.suggestions = [];
     this.selectedIndex = -1;
   }
-
   destroy() {
     this.close();
-    this.inputEl.removeEventListener('input',   this._onInput);
-    this.inputEl.removeEventListener('focus',   this._onFocus);
-    this.inputEl.removeEventListener('blur',    this._onBlur);
-    this.inputEl.removeEventListener('keydown', this._onKeydown);
+    this.inputEl.removeEventListener("input", this._onInput);
+    this.inputEl.removeEventListener("focus", this._onFocus);
+    this.inputEl.removeEventListener("blur", this._onBlur);
+    this.inputEl.removeEventListener("keydown", this._onKeydown);
   }
+};
+
+// src/utils/helpers.ts
+function nameToCommandSlug(name) {
+  return (name || "object").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "object";
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Collect every distinct frontmatter value used for `key` across the vault,
- * sorted case-insensitively. For tag/tags keys the tag cache is also consulted.
- */
-function getVaultValuesForKey(app, key) {
-  const values = new Set();
-  if (key === 'tags' || key === 'tag') {
-    const tags = app.metadataCache.getTags() ?? {};
-    for (const tag of Object.keys(tags)) {
-      values.add(tag.startsWith('#') ? tag.slice(1) : tag);
-    }
-  }
-  for (const file of app.vault.getMarkdownFiles()) {
-    const raw = app.metadataCache.getFileCache(file)?.frontmatter?.[key];
-    if (raw == null) continue;
-    if (Array.isArray(raw)) raw.forEach((v) => { if (v != null) values.add(String(v).trim()); });
-    else { const s = String(raw).trim(); if (s) values.add(s); }
-  }
-  return [...values].filter(Boolean)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-}
-
-/**
- * Render the extra frontmatter fields defined on an object type into a container.
- * Attaches vault-wide autocomplete to every field input. Wikilink suggestions are
- * displayed as "Page Name" + a link icon; selecting one stores the full [[...]] value.
- * `app` is required for the suggest widget.
- */
 function renderFieldInputs(container, app, objType, fieldValues, onEnter, insertBefore = null) {
-  // Remove only previously-rendered dynamic field rows (identified by data attribute),
-  // leaving all other sibling settings (Title, Description, buttons) untouched.
-  container.querySelectorAll('[data-ffc-field]').forEach(el => el.remove());
-
-  const fields = objType?.fields ?? [];
+  var _a;
+  container.querySelectorAll("[data-ffc-field]").forEach((el) => el.remove());
+  const fields = (_a = objType == null ? void 0 : objType.fields) != null ? _a : [];
   for (const field of fields) {
-    const s = new obsidian.Setting(container)
-      .setName(field.label || field.key)
-      .setDesc(field.type === 'list' ? 'Separate multiple values with commas' : '')
-      .addText((text) => {
-        text
-          .setPlaceholder(field.type === 'list' ? 'e.g. tag1, tag2' : '')
-          .setValue(fieldValues[field.key] ?? '')
-          .onChange((v) => { fieldValues[field.key] = v; });
-
-        // Create the suggest FIRST so its internal keydown listener is registered
-        // before ours — the suggest's handler calls stopImmediatePropagation when
-        // it selects a suggestion, which prevents our listener below from firing.
-        if (field.key?.trim()) {
-          new FrontmatterValueSuggest(app, text.inputEl, field.key, field.type);
-        }
-
-        // Submit the form on Enter. If a suggestion is highlighted the suggest's
-        // keydown handler fires first (registered earlier) and calls
-        // stopImmediatePropagation, so this listener is never reached in that case.
-        text.inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') onEnter();
-        });
+    const s = new import_obsidian2.Setting(container).setName(field.label || field.key).setDesc(field.type === "list" ? "Separate multiple values with commas" : "").addText((text) => {
+      var _a2, _b;
+      text.setPlaceholder(field.type === "list" ? "e.g. tag1, tag2" : "").setValue((_a2 = fieldValues[field.key]) != null ? _a2 : "").onChange((v) => {
+        fieldValues[field.key] = v;
       });
-
-    // Tag for cleanup on re-render
-    s.settingEl.dataset.ffcField = 'true';
-
-    // Obsidian always appends to the end of the container; reposition so fields
-    // sit between Title and Description rather than after the buttons.
-    if (insertBefore) container.insertBefore(s.settingEl, insertBefore);
+      if ((_b = field.key) == null ? void 0 : _b.trim()) {
+        new FrontmatterValueSuggest(app, text.inputEl, field.key, field.type);
+      }
+      text.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter")
+          onEnter();
+      });
+    });
+    s.settingEl.dataset["ffcField"] = "true";
+    if (insertBefore)
+      container.insertBefore(s.settingEl, insertBefore);
   }
 }
 
-// ─── New Object Modal (single type) ──────────────────────────────────────────
-
-class NewObjectModal extends obsidian.Modal {
-  constructor(app, objType, onSubmit, initialTitle = '') {
-    super(app);
-    this.objType = objType;
-    this.onSubmit = onSubmit;
-    this.titleValue = initialTitle;
-    this.fieldValues = {};
-    this.descriptionValue = '';
-  }
-
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.addClass('ffc-new-object-modal');
-    contentEl.createEl('h2', { text: `New ${this.objType.name}` });
-
-    // Title — focused immediately
-    new obsidian.Setting(contentEl)
-      .setName('Title')
-      .addText((text) => {
-        text.setPlaceholder(`Enter ${this.objType.name} title…`)
-          .setValue(this.titleValue)
-          .onChange((v) => { this.titleValue = v; });
-        text.inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') this.submit();
-          if (e.key === 'Escape') this.close();
-        });
-        setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
-      });
-
-    // Description — rendered here so its settingEl exists as the insertion anchor.
-    // Extra fields are then inserted before it, giving the final order:
-    // Title → [object-type fields] → Description → buttons.
-    const descSetting = new obsidian.Setting(contentEl)
-      .setName('Description')
-      .setDesc('Added to the body of the created page')
-      .addTextArea((ta) => {
-        ta.setPlaceholder('Optional description…')
-          .onChange((v) => { this.descriptionValue = v; });
-        ta.inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') this.close();
-        });
-      });
-
-    // Extra fields — inserted as true siblings before Description so Obsidian's
-    // native .setting-item dividers and spacing apply without any wrapper div.
-    renderFieldInputs(contentEl, this.app, this.objType, this.fieldValues, () => this.submit(), descSetting.settingEl);
-
-    new obsidian.Setting(contentEl)
-      .addButton((btn) => btn.setButtonText('Create').setCta().onClick(() => this.submit()))
-      .addButton((btn) => btn.setButtonText('Cancel').onClick(() => this.close()));
-  }
-
-  submit() {
-    const title = this.titleValue.trim();
-    if (!title) { new obsidian.Notice('Please enter a title.'); return; }
-    this.close();
-    this.onSubmit(title, this.fieldValues, this.descriptionValue);
-  }
-
-  onClose() { this.contentEl.empty(); }
-}
-
-// ─── Combined New Object Modal (multi-type) ───────────────────────────────────
-
-class CombinedNewObjectModal extends obsidian.Modal {
-  constructor(app, objectTypes, onSubmit) {
-    super(app);
-    this.objectTypes = objectTypes;
-    this.selectedType = objectTypes[0];
-    this.onSubmit = onSubmit;
-    this.titleValue = '';
-    this.fieldValues = {};
-    this.descriptionValue = '';
-  }
-
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.addClass('ffc-new-object-modal');
-    contentEl.createEl('h2', { text: 'New Object' });
-
-    // Description settingEl is used as the insertBefore anchor in renderFieldInputs.
-    // Declare here so the dropdown onChange closure can reference it after it's set.
-    let descSettingEl;
-
-    // Type dropdown
-    new obsidian.Setting(contentEl)
-      .setName('Type')
-      .addDropdown((dd) => {
-        for (const obj of this.objectTypes) dd.addOption(obj.id, obj.name);
-        dd.setValue(this.selectedType.id);
-        dd.onChange((id) => {
-          this.selectedType = this.objectTypes.find((o) => o.id === id) ?? this.objectTypes[0];
-          this.fieldValues = {}; // reset values when type changes
-          renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
-        });
-      });
-
-    // Title — focused immediately
-    new obsidian.Setting(contentEl)
-      .setName('Title')
-      .addText((text) => {
-        text.setPlaceholder('Enter title…').onChange((v) => { this.titleValue = v; });
-        text.inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') this.submit();
-          if (e.key === 'Escape') this.close();
-        });
-        setTimeout(() => text.inputEl.focus(), 50);
-      });
-
-    // Description — rendered as the anchor; dynamic fields are inserted before it.
-    const descSetting = new obsidian.Setting(contentEl)
-      .setName('Description')
-      .setDesc('Added to the body of the created page')
-      .addTextArea((ta) => {
-        ta.setPlaceholder('Optional description…')
-          .onChange((v) => { this.descriptionValue = v; });
-        ta.inputEl.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape') this.close();
-        });
-      });
-    descSettingEl = descSetting.settingEl;
-
-    // Initial fields for the selected type — inserted before Description.
-    renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
-
-    new obsidian.Setting(contentEl)
-      .addButton((btn) => btn.setButtonText('Create').setCta().onClick(() => this.submit()))
-      .addButton((btn) => btn.setButtonText('Cancel').onClick(() => this.close()));
-  }
-
-  submit() {
-    const title = this.titleValue.trim();
-    if (!title) { new obsidian.Notice('Please enter a title.'); return; }
-    this.close();
-    this.onSubmit(this.selectedType, title, this.fieldValues, this.descriptionValue);
-  }
-
-  onClose() { this.contentEl.empty(); }
-}
-
-// ─── Object Type Settings Modal ───────────────────────────────────────────────
-//
-// Opens when the user clicks the gear icon next to an object type.
-// Renders all the per-type settings (name, detection filters, template, fields,
-// preview fields, etc.) inside a modal so the main settings page stays clean.
-
-class ObjectTypeSettingsModal extends obsidian.Modal {
+// src/ui/object-type-settings-modal.ts
+var ObjectTypeSettingsModal = class extends import_obsidian3.Modal {
   constructor(app, plugin, index, onDismiss) {
     super(app);
-    this.plugin    = plugin;
-    this.index     = index;
+    this.plugin = plugin;
+    this.index = index;
     this.onDismiss = onDismiss;
   }
-
   onOpen() {
     this._render();
   }
-
   _render() {
+    var _a, _b, _c, _d;
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('ffc-objtype-modal');
-
+    contentEl.addClass("ffc-objtype-modal");
     const obj = this.plugin.settings.objectTypes[this.index];
-    if (!obj) { contentEl.createEl('p', { text: 'Object type not found.' }); return; }
-
-    contentEl.createEl('h2', { text: obj.name || 'Object Type Settings', cls: 'ffc-modal-title' });
-
-    // ── Name ────────────────────────────────────────────────────────────────
-    new obsidian.Setting(contentEl).setName('Object name').setDesc('Creates a "Create new {name}" command in the palette.')
-      .addText((text) => text.setPlaceholder('e.g. Task').setValue(obj.name)
-        .onChange(async (value) => {
-          obj.name = value;
-          await this.plugin.saveSettings();
-          const cmdId = `ffc-objtype-${obj.commandSlug}`;
-          if (this.plugin.commandRefs?.[cmdId]) this.plugin.commandRefs[cmdId].name = `Create new ${value}`;
-          const findCmdId = `${cmdId}-find`;
-          if (this.plugin.commandRefs?.[findCmdId]) this.plugin.commandRefs[findCmdId].name = `Find ${value}`;
-          // Update modal title live
-          const titleEl = contentEl.querySelector('.ffc-modal-title');
-          if (titleEl) titleEl.textContent = value || 'Object Type Settings';
-        })
-      );
-
-    // ── Description ──────────────────────────────────────────────────────────
-    new obsidian.Setting(contentEl).setName('Description').setDesc('Short description shown beneath the object type name in the settings list.')
-      .addText((text) => text.setPlaceholder('e.g. Tracks actionable to-dos').setValue(obj.description || '')
-        .onChange(async (value) => {
-          obj.description = value;
-          await this.plugin.saveSettings();
-        })
-      );
-
+    if (!obj) {
+      contentEl.createEl("p", { text: "Object type not found." });
+      return;
+    }
+    contentEl.createEl("h2", { text: obj.name || "Object Type Settings", cls: "ffc-modal-title" });
+    new import_obsidian3.Setting(contentEl).setName("Object name").setDesc('Creates a "Create new {name}" command in the palette.').addText(
+      (text) => text.setPlaceholder("e.g. Task").setValue(obj.name).onChange(async (value) => {
+        obj.name = value;
+        await this.plugin.saveSettings();
+        const cmdId = `ffc-objtype-${obj.commandSlug}`;
+        const refs = this.plugin.commandRefs;
+        if (refs[cmdId])
+          refs[cmdId].name = `Create new ${value}`;
+        const findCmdId = `${cmdId}-find`;
+        if (refs[findCmdId])
+          refs[findCmdId].name = `Find ${value}`;
+        const titleEl = contentEl.querySelector(".ffc-modal-title");
+        if (titleEl)
+          titleEl.textContent = value || "Object Type Settings";
+      })
+    );
+    new import_obsidian3.Setting(contentEl).setName("Description").setDesc("Short description shown beneath the object type name in the settings list.").addText(
+      (text) => text.setPlaceholder("e.g. Tracks actionable to-dos").setValue(obj.description || "").onChange(async (value) => {
+        obj.description = value;
+        await this.plugin.saveSettings();
+      })
+    );
     if (obj.commandSlug !== nameToCommandSlug(obj.name)) {
-      contentEl.createEl('p', {
-        text: `⚠ Command ID ("${obj.commandSlug}") was set when this type was first created and no longer matches the current name. Renaming only updates the display — to fix it, change "commandSlug" in data.json to "${nameToCommandSlug(obj.name)}" and rebind any shortcuts.`,
-        cls: 'ffc-hint ffc-slug-warning',
+      contentEl.createEl("p", {
+        text: `\u26A0 Command ID ("${obj.commandSlug}") was set when this type was first created and no longer matches the current name. Renaming only updates the display \u2014 to fix it, change "commandSlug" in data.json to "${nameToCommandSlug(obj.name)}" and rebind any shortcuts.`,
+        cls: "ffc-hint ffc-slug-warning"
       });
     }
-
-    // ── Object Detection ─────────────────────────────────────────────────────
-    const detectionSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    detectionSection.createEl('p', { text: 'Object Detection', cls: 'ffc-filters-title' });
-    detectionSection.createEl('p', {
+    const detectionSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    detectionSection.createEl("p", { text: "Object Detection", cls: "ffc-filters-title" });
+    detectionSection.createEl("p", {
       text: 'Filters that identify existing files of this type. Used by the trigger menu and the "Find" command. If no filters are set, files in the Save Folder are used as a fallback.',
-      cls: 'ffc-hint',
+      cls: "ffc-hint"
     });
-
-    new obsidian.Setting(detectionSection)
-      .setName('Filter match mode')
-      .setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
-      .addDropdown((dd) =>
-        dd.addOption('all', 'Match ALL (AND)').addOption('any', 'Match ANY (OR)')
-          .setValue(obj.matchMode ?? 'all')
-          .onChange(async (value) => { obj.matchMode = value; await this.plugin.saveSettings(); })
-      );
-
+    new import_obsidian3.Setting(detectionSection).setName("Filter match mode").setDesc("Should a file match ALL filters (AND) or at least ONE filter (OR)?").addDropdown(
+      (dd) => {
+        var _a2;
+        return dd.addOption("all", "Match ALL (AND)").addOption("any", "Match ANY (OR)").setValue((_a2 = obj.matchMode) != null ? _a2 : "all").onChange(async (value) => {
+          obj.matchMode = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
     if (!obj.matchFilters || obj.matchFilters.length === 0) {
-      detectionSection.createEl('p', { text: 'No filters — save folder will be used as a fallback.', cls: 'ffc-hint' });
+      detectionSection.createEl("p", { text: "No filters \u2014 save folder will be used as a fallback.", cls: "ffc-hint" });
     }
-    for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
+    for (let fi = 0; fi < ((_a = obj.matchFilters) != null ? _a : []).length; fi++) {
       this._renderObjectMatchFilter(detectionSection, fi);
     }
-    new obsidian.Setting(detectionSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Detection Filter').onClick(async () => {
-        if (!obj.matchFilters) obj.matchFilters = [];
-        obj.matchFilters.push({ key: '', operator: 'equals', value: '' });
+    new import_obsidian3.Setting(detectionSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Detection Filter").onClick(async () => {
+        if (!obj.matchFilters)
+          obj.matchFilters = [];
+        obj.matchFilters.push({ key: "", operator: "equals", value: "" });
         await this.plugin.saveSettings();
         this._render();
       })
     );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Show in trigger menu')
-      .setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || '@'}" inline trigger menu.`)
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showInTriggerMenu ?? false)
-          .onChange(async (value) => { obj.showInTriggerMenu = value; await this.plugin.saveSettings(); })
-      );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Enable "Find" command')
-      .setDesc(`When enabled, adds a "Find ${obj.name}" command to the palette for fuzzy-searching files of this type.`)
-      .addToggle((toggle) =>
-        toggle.setValue(obj.enableFindCommand ?? false)
-          .onChange(async (value) => {
-            obj.enableFindCommand = value;
-            await this.plugin.saveSettings();
-            if (value) this.plugin.registerFindCommand(obj);
-          })
-      );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Style object links')
-      .setDesc('When enabled, inline links to files of this type will have their underline removed and a background fill applied (using tag style variables).')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.styledLinks ?? false)
-          .onChange(async (value) => {
-            obj.styledLinks = value;
-            await this.plugin.saveSettings();
-            this.plugin.buildStyledObjectSet();
-            this.plugin.refreshObjectLinkStyles();
-          })
-      );
-
-    // ── Template & Save Folder ───────────────────────────────────────────────
+    new import_obsidian3.Setting(detectionSection).setName("Show in trigger menu").setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || "@"}" inline trigger menu.`).addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.showInTriggerMenu) != null ? _a2 : false).onChange(async (value) => {
+          obj.showInTriggerMenu = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    new import_obsidian3.Setting(detectionSection).setName('Enable "Find" command').setDesc(`When enabled, adds a "Find ${obj.name}" command to the palette for fuzzy-searching files of this type.`).addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.enableFindCommand) != null ? _a2 : false).onChange(async (value) => {
+          obj.enableFindCommand = value;
+          await this.plugin.saveSettings();
+          if (value)
+            this.plugin.registerFindCommand(obj);
+        });
+      }
+    );
+    new import_obsidian3.Setting(detectionSection).setName("Style object links").setDesc("When enabled, inline links to files of this type will have their underline removed and a background fill applied.").addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.styledLinks) != null ? _a2 : false).onChange(async (value) => {
+          obj.styledLinks = value;
+          await this.plugin.saveSettings();
+          this.plugin.buildStyledObjectSet();
+          this.plugin.refreshObjectLinkStyles();
+        });
+      }
+    );
     const templateFiles = this.plugin.getTemplateFiles();
     if (templateFiles.length > 0) {
-      new obsidian.Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new object of this type.')
-        .addDropdown((dd) => {
-          dd.addOption('', '— None —');
-          for (const f of templateFiles) dd.addOption(f.path, f.basename);
-          dd.setValue(obj.templatePath || '');
-          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); });
+      new import_obsidian3.Setting(contentEl).setName("Template").setDesc("Template file applied when creating a new object of this type.").addDropdown((dd) => {
+        dd.addOption("", "\u2014 None \u2014");
+        for (const f of templateFiles)
+          dd.addOption(f.path, f.basename);
+        dd.setValue(obj.templatePath || "");
+        dd.onChange(async (value) => {
+          obj.templatePath = value;
+          await this.plugin.saveSettings();
         });
+      });
     } else {
-      new obsidian.Setting(contentEl).setName('Template').setDesc('No templates found. Set the templates folder in General settings, or check it contains .md files.')
-        .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
-          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); })
-        );
-    }
-
-    new obsidian.Setting(contentEl).setName('Save folder').setDesc('Where new files are created (e.g. "Projects/Tasks"). Leave blank for vault root.')
-      .addText((text) => text.setPlaceholder('e.g. Projects/Tasks').setValue(obj.saveFolder || '')
-        .onChange(async (value) => { obj.saveFolder = value.trim(); await this.plugin.saveSettings(); })
+      new import_obsidian3.Setting(contentEl).setName("Template").setDesc("No templates found. Set the templates folder in General settings, or check it contains .md files.").addText(
+        (text) => text.setPlaceholder("path/to/template.md").setValue(obj.templatePath || "").onChange(async (value) => {
+          obj.templatePath = value.trim();
+          await this.plugin.saveSettings();
+        })
       );
-
-    // ── Creation Fields ──────────────────────────────────────────────────────
-    const fieldsSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    fieldsSection.createEl('p', { text: 'Creation Fields', cls: 'ffc-filters-title' });
-    fieldsSection.createEl('p', {
-      text: 'Fields shown in the creation dialog. Values are written into the new file\'s frontmatter.',
-      cls: 'ffc-hint',
+    }
+    new import_obsidian3.Setting(contentEl).setName("Save folder").setDesc('Where new files are created (e.g. "Projects/Tasks"). Leave blank for vault root.').addText(
+      (text) => text.setPlaceholder("e.g. Projects/Tasks").setValue(obj.saveFolder || "").onChange(async (value) => {
+        obj.saveFolder = value.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    const fieldsSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    fieldsSection.createEl("p", { text: "Creation Fields", cls: "ffc-filters-title" });
+    fieldsSection.createEl("p", {
+      text: "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
+      cls: "ffc-hint"
     });
-
-    for (let fi = 0; fi < (obj.fields ?? []).length; fi++) {
+    for (let fi = 0; fi < ((_b = obj.fields) != null ? _b : []).length; fi++) {
       this._renderObjectField(fieldsSection, fi);
     }
-    new obsidian.Setting(fieldsSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Field').onClick(async () => {
-        if (!obj.fields) obj.fields = [];
-        obj.fields.push({ key: '', label: '', type: 'text' });
+    new import_obsidian3.Setting(fieldsSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Field").onClick(async () => {
+        if (!obj.fields)
+          obj.fields = [];
+        obj.fields.push({ key: "", label: "", type: "text" });
         await this.plugin.saveSettings();
         this._render();
       })
     );
-
-    // ── Preview Fields ───────────────────────────────────────────────────────
-    const previewSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    previewSection.createEl('p', { text: 'Preview Fields', cls: 'ffc-filters-title' });
-    previewSection.createEl('p', {
-      text: 'Frontmatter keys shown when hovering over a link to an object of this type. The title is always shown; these fields appear below it.',
-      cls: 'ffc-hint',
+    const previewSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    previewSection.createEl("p", { text: "Preview Fields", cls: "ffc-filters-title" });
+    previewSection.createEl("p", {
+      text: "Frontmatter keys shown when hovering over a link to an object of this type.",
+      cls: "ffc-hint"
     });
-
-    for (let fi = 0; fi < (obj.previewFields ?? []).length; fi++) {
+    for (let fi = 0; fi < ((_c = obj.previewFields) != null ? _c : []).length; fi++) {
       this._renderPreviewField(previewSection, fi);
     }
-    new obsidian.Setting(previewSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Preview Field').onClick(async () => {
-        if (!obj.previewFields) obj.previewFields = [];
-        obj.previewFields.push({ key: '', label: '' });
+    new import_obsidian3.Setting(previewSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Preview Field").onClick(async () => {
+        if (!obj.previewFields)
+          obj.previewFields = [];
+        obj.previewFields.push({ key: "", label: "" });
         await this.plugin.saveSettings();
         this._render();
       })
     );
-
-    // Show image toggle lives inside the Preview Fields section so it's obvious
-    // it controls what appears in the hover popup.
-    new obsidian.Setting(previewSection)
-      .setName('Show cover image in preview')
-      .setDesc('When enabled, the image from the Image Key (see below) is shown at the top of the hover card.')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showImageInPreview ?? false)
-          .onChange(async (value) => { obj.showImageInPreview = value; await this.plugin.saveSettings(); })
-      );
-
-    // ── Canvas Card Fields ───────────────────────────────────────────────────
-    const canvasSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    canvasSection.createEl('p', { text: 'Canvas Card Fields', cls: 'ffc-filters-title' });
-    canvasSection.createEl('p', {
-      text: 'Frontmatter keys shown on canvas cards for objects of this type. When you add an object card to a canvas, these fields appear below the title.',
-      cls: 'ffc-hint',
+    new import_obsidian3.Setting(previewSection).setName("Show cover image in preview").setDesc("When enabled, the image from the Image Key is shown at the top of the hover card.").addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.showImageInPreview) != null ? _a2 : false).onChange(async (value) => {
+          obj.showImageInPreview = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    const canvasSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    canvasSection.createEl("p", { text: "Canvas Card Fields", cls: "ffc-filters-title" });
+    canvasSection.createEl("p", {
+      text: "Frontmatter keys shown on canvas cards for objects of this type.",
+      cls: "ffc-hint"
     });
-
-    for (let fi = 0; fi < (obj.canvasFields ?? []).length; fi++) {
+    for (let fi = 0; fi < ((_d = obj.canvasFields) != null ? _d : []).length; fi++) {
       this._renderCanvasField(canvasSection, fi);
     }
-    new obsidian.Setting(canvasSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Canvas Field').onClick(async () => {
-        if (!obj.canvasFields) obj.canvasFields = [];
-        obj.canvasFields.push({ key: '', label: '' });
+    new import_obsidian3.Setting(canvasSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Canvas Field").onClick(async () => {
+        if (!obj.canvasFields)
+          obj.canvasFields = [];
+        obj.canvasFields.push({ key: "", label: "" });
         await this.plugin.saveSettings();
         this._render();
       })
     );
-
-    new obsidian.Setting(canvasSection)
-      .setName('Show cover image on canvas cards')
-      .setDesc('When enabled, the image from the Image Key (see below) is embedded at the top of the canvas card.')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showImageInCanvas ?? false)
-          .onChange(async (value) => { obj.showImageInCanvas = value; await this.plugin.saveSettings(); })
-      );
-
-    // ── Image ────────────────────────────────────────────────────────────────
-    const imageSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    imageSection.createEl('p', { text: 'Cover Image', cls: 'ffc-filters-title' });
-    imageSection.createEl('p', {
-      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). Used by the hover preview and canvas card toggles above.',
-      cls: 'ffc-hint',
+    new import_obsidian3.Setting(canvasSection).setName("Show cover image on canvas cards").setDesc("When enabled, the image from the Image Key is embedded at the top of the canvas card.").addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.showImageInCanvas) != null ? _a2 : false).onChange(async (value) => {
+          obj.showImageInCanvas = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    const imageSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    imageSection.createEl("p", { text: "Cover Image", cls: "ffc-filters-title" });
+    imageSection.createEl("p", {
+      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image").',
+      cls: "ffc-hint"
     });
-
-    new obsidian.Setting(imageSection)
-      .setName('Image frontmatter key')
-      .setDesc('e.g. cover, image, thumbnail')
-      .addText((text) =>
-        text.setPlaceholder('cover')
-          .setValue(obj.imageKey ?? '')
-          .onChange(async (value) => { obj.imageKey = value.trim(); await this.plugin.saveSettings(); })
-      );
+    new import_obsidian3.Setting(imageSection).setName("Image frontmatter key").setDesc("e.g. cover, image, thumbnail").addText(
+      (text) => {
+        var _a2;
+        return text.setPlaceholder("cover").setValue((_a2 = obj.imageKey) != null ? _a2 : "").onChange(async (value) => {
+          obj.imageKey = value.trim();
+          await this.plugin.saveSettings();
+        });
+      }
+    );
   }
-
   _renderObjectMatchFilter(container, filterIndex) {
-    const obj    = this.plugin.settings.objectTypes[this.index];
+    var _a, _b;
+    const obj = this.plugin.settings.objectTypes[this.index];
     const filter = obj.matchFilters[filterIndex];
-    const row    = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const isPathOp = filter.operator === 'in_folder' || filter.operator === 'not_in_folder';
-
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const isPathOp = filter.operator === "in_folder" || filter.operator === "not_in_folder";
     if (!isPathOp) {
-      const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-      keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key ?? '';
-      keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
+      const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+      keyInput.type = "text";
+      keyInput.placeholder = "Property key";
+      keyInput.value = (_a = filter.key) != null ? _a : "";
+      keyInput.addEventListener("change", async () => {
+        filter.key = keyInput.value.trim();
+        await this.plugin.saveSettings();
+      });
     }
-
-    const opSelect = row.createEl('select', { cls: 'ffc-select' });
+    const opSelect = row.createEl("select", { cls: "ffc-select" });
     for (const op of [
-      { value: 'equals',        label: '=' },
-      { value: 'not_equals',    label: '≠' },
-      { value: 'contains',      label: 'contains' },
-      { value: 'exists',        label: 'exists' },
-      { value: 'in_folder',     label: 'in folder' },
-      { value: 'not_in_folder', label: 'not in folder' },
+      { value: "equals", label: "=" },
+      { value: "not_equals", label: "\u2260" },
+      { value: "contains", label: "contains" },
+      { value: "exists", label: "exists" },
+      { value: "in_folder", label: "in folder" },
+      { value: "not_in_folder", label: "not in folder" }
     ]) {
-      const opt = opSelect.createEl('option', { text: op.label, value: op.value });
-      if (filter.operator === op.value) opt.selected = true;
+      const opt = opSelect.createEl("option", { text: op.label, value: op.value });
+      if (filter.operator === op.value)
+        opt.selected = true;
     }
-    opSelect.addEventListener('change', async () => { filter.operator = opSelect.value; await this.plugin.saveSettings(); this._render(); });
-
-    if (filter.operator !== 'exists') {
-      const valInput = row.createEl('input', { cls: 'ffc-input ffc-input-val' });
-      valInput.type = 'text';
-      valInput.placeholder = isPathOp ? 'Folder path (e.g. Templates)' : 'Value';
-      valInput.value = filter.value ?? '';
-      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
+    opSelect.addEventListener("change", async () => {
+      filter.operator = opSelect.value;
+      await this.plugin.saveSettings();
+      this._render();
+    });
+    if (filter.operator !== "exists") {
+      const valInput = row.createEl("input", { cls: "ffc-input ffc-input-val" });
+      valInput.type = "text";
+      valInput.placeholder = isPathOp ? "Folder path (e.g. Templates)" : "Value";
+      valInput.value = (_b = filter.value) != null ? _b : "";
+      valInput.addEventListener("change", async () => {
+        filter.value = valInput.value;
+        await this.plugin.saveSettings();
+      });
     }
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
       obj.matchFilters.splice(filterIndex, 1);
       await this.plugin.saveSettings();
       this._render();
     };
   }
-
   _renderObjectField(container, fieldIndex) {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+    var _a, _b;
+    const obj = this.plugin.settings.objectTypes[this.index];
     const field = obj.fields[fieldIndex];
-    const row   = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
-    labelInput.type = 'text'; labelInput.placeholder = 'Label'; labelInput.value = field.label ?? '';
-    labelInput.title = 'Display label shown in the creation dialog';
-    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
-
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
-    keyInput.title = 'The frontmatter property key written into the new file';
-    keyInput.addEventListener('change', async () => { field.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
-
-    const typeSelect = row.createEl('select', { cls: 'ffc-select' });
-    for (const t of [{ value: 'text', label: 'Text' }, { value: 'list', label: 'List' }]) {
-      const opt = typeSelect.createEl('option', { text: t.label, value: t.value });
-      if (field.type === t.value) opt.selected = true;
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const labelInput = row.createEl("input", { cls: "ffc-input ffc-input-label" });
+    labelInput.type = "text";
+    labelInput.placeholder = "Label";
+    labelInput.value = (_a = field.label) != null ? _a : "";
+    labelInput.title = "Display label shown in the creation dialog";
+    labelInput.addEventListener("change", async () => {
+      field.label = labelInput.value;
+      await this.plugin.saveSettings();
+    });
+    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+    keyInput.type = "text";
+    keyInput.placeholder = "Frontmatter key";
+    keyInput.value = (_b = field.key) != null ? _b : "";
+    keyInput.title = "The frontmatter property key written into the new file";
+    keyInput.addEventListener("change", async () => {
+      field.key = keyInput.value.trim();
+      await this.plugin.saveSettings();
+    });
+    const typeSelect = row.createEl("select", { cls: "ffc-select" });
+    for (const t of [{ value: "text", label: "Text" }, { value: "list", label: "List" }]) {
+      const opt = typeSelect.createEl("option", { text: t.label, value: t.value });
+      if (field.type === t.value)
+        opt.selected = true;
     }
-    typeSelect.title = 'List splits comma-separated input into a YAML array';
-    typeSelect.addEventListener('change', async () => { field.type = typeSelect.value; await this.plugin.saveSettings(); });
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+    typeSelect.title = "List splits comma-separated input into a YAML array";
+    typeSelect.addEventListener("change", async () => {
+      field.type = typeSelect.value;
+      await this.plugin.saveSettings();
+    });
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
       obj.fields.splice(fieldIndex, 1);
       await this.plugin.saveSettings();
       this._render();
     };
   }
-
   _renderPreviewField(container, fieldIndex) {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+    var _a, _b;
+    const obj = this.plugin.settings.objectTypes[this.index];
     const field = obj.previewFields[fieldIndex];
-    const row   = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
-    labelInput.type = 'text'; labelInput.placeholder = 'Display label'; labelInput.value = field.label ?? '';
-    labelInput.title = 'Label shown in the preview card (leave blank to use the key name)';
-    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
-
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
-    keyInput.title = 'The frontmatter property key whose value will appear in the preview';
-    keyInput.addEventListener('change', async () => {
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const labelInput = row.createEl("input", { cls: "ffc-input ffc-input-label" });
+    labelInput.type = "text";
+    labelInput.placeholder = "Display label";
+    labelInput.value = (_a = field.label) != null ? _a : "";
+    labelInput.title = "Label shown in the preview card (leave blank to use the key name)";
+    labelInput.addEventListener("change", async () => {
+      field.label = labelInput.value;
+      await this.plugin.saveSettings();
+    });
+    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+    keyInput.type = "text";
+    keyInput.placeholder = "Frontmatter key";
+    keyInput.value = (_b = field.key) != null ? _b : "";
+    keyInput.title = "The frontmatter property key whose value will appear in the preview";
+    keyInput.addEventListener("change", async () => {
       field.key = keyInput.value.trim();
       await this.plugin.saveSettings();
       this.plugin.buildStyledObjectSet();
       this.plugin.refreshObjectLinkStyles();
     });
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
       obj.previewFields.splice(fieldIndex, 1);
       await this.plugin.saveSettings();
       this.plugin.buildStyledObjectSet();
@@ -800,323 +576,595 @@ class ObjectTypeSettingsModal extends obsidian.Modal {
       this._render();
     };
   }
-
   _renderCanvasField(container, fieldIndex) {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+    var _a, _b;
+    const obj = this.plugin.settings.objectTypes[this.index];
     const field = obj.canvasFields[fieldIndex];
-    const row   = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
-    labelInput.type        = 'text';
-    labelInput.placeholder = 'Display label';
-    labelInput.value       = field.label ?? '';
-    labelInput.title       = 'Label shown on the canvas card (leave blank to use the key name)';
-    labelInput.addEventListener('change', async () => {
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const labelInput = row.createEl("input", { cls: "ffc-input ffc-input-label" });
+    labelInput.type = "text";
+    labelInput.placeholder = "Display label";
+    labelInput.value = (_a = field.label) != null ? _a : "";
+    labelInput.title = "Label shown on the canvas card (leave blank to use the key name)";
+    labelInput.addEventListener("change", async () => {
       field.label = labelInput.value;
       await this.plugin.saveSettings();
     });
-
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type        = 'text';
-    keyInput.placeholder = 'Frontmatter key';
-    keyInput.value       = field.key ?? '';
-    keyInput.title       = 'The frontmatter property key whose value will appear on the card';
-    keyInput.addEventListener('change', async () => {
+    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+    keyInput.type = "text";
+    keyInput.placeholder = "Frontmatter key";
+    keyInput.value = (_b = field.key) != null ? _b : "";
+    keyInput.title = "The frontmatter property key whose value will appear on the card";
+    keyInput.addEventListener("change", async () => {
       field.key = keyInput.value.trim();
       await this.plugin.saveSettings();
     });
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
       obj.canvasFields.splice(fieldIndex, 1);
       await this.plugin.saveSettings();
       this._render();
     };
   }
-
   onClose() {
     this.contentEl.empty();
-    if (this.onDismiss) this.onDismiss();
+    if (this.onDismiss)
+      this.onDismiss();
   }
-}
+};
 
-// ─── Object Type Delete Confirmation Modal ────────────────────────────────────
-
-class ObjectTypeDeleteModal extends obsidian.Modal {
+// src/ui/object-type-delete-modal.ts
+var import_obsidian4 = require("obsidian");
+var ObjectTypeDeleteModal = class extends import_obsidian4.Modal {
   constructor(app, plugin, index, onDismiss) {
     super(app);
-    this.plugin    = plugin;
-    this.index     = index;
+    this.plugin = plugin;
+    this.index = index;
     this.onDismiss = onDismiss;
   }
-
   onOpen() {
     const { contentEl } = this;
-    contentEl.addClass('ffc-confirm-modal');
+    contentEl.addClass("ffc-confirm-modal");
     const obj = this.plugin.settings.objectTypes[this.index];
-
-    contentEl.createEl('h2', { text: 'Delete Object Type?' });
-    contentEl.createEl('p', {
-      text: `Are you sure you want to delete "${obj?.name || 'this object type'}"? This will remove it from your settings. Existing files will not be affected.`,
-      cls: 'ffc-confirm-desc',
+    contentEl.createEl("h2", { text: "Delete Object Type?" });
+    contentEl.createEl("p", {
+      text: `Are you sure you want to delete "${(obj == null ? void 0 : obj.name) || "this object type"}"? This will remove it from your settings. Existing files will not be affected.`,
+      cls: "ffc-confirm-desc"
     });
-
-    const btnRow = contentEl.createDiv({ cls: 'ffc-confirm-buttons' });
-
-    btnRow.createEl('button', { text: 'Cancel', cls: 'ffc-btn-cancel' }).onclick = () => {
+    const btnRow = contentEl.createDiv({ cls: "ffc-confirm-buttons" });
+    btnRow.createEl("button", { text: "Cancel", cls: "ffc-btn-cancel" }).onclick = () => {
       this.close();
     };
-
-    const deleteBtn = btnRow.createEl('button', { text: 'Delete', cls: 'mod-warning' });
+    const deleteBtn = btnRow.createEl("button", { text: "Delete", cls: "mod-warning" });
     deleteBtn.onclick = async () => {
       this.plugin.settings.objectTypes.splice(this.index, 1);
       await this.plugin.saveSettings();
       this.close();
     };
   }
-
   onClose() {
     this.contentEl.empty();
-    if (this.onDismiss) this.onDismiss();
+    if (this.onDismiss)
+      this.onDismiss();
   }
-}
-
-// ─── Filtered Files Widget ────────────────────────────────────────────────────
-//
-// A sidebar panel that displays configurable lists of filtered files.
-// Each "section" has its own set of filter rules, sort order, and optional limit.
-// Sections are managed interactively inside the view itself; only a few global
-// preferences (display-name key, reset) live in the main settings tab.
-
-const FFW_VIEW_TYPE = 'filtered-files-widget-view';
-
-const FFW_FILTER_TYPE_LABELS = {
-  tag:         'Tag',
-  frontmatter: 'Frontmatter',
-  path:        'Path / folder',
-  name:        'File name',
 };
 
-const FFW_SORT_OPTIONS = [
-  { value: 'modified-desc',    label: 'Modified (newest)' },
-  { value: 'modified-asc',     label: 'Modified (oldest)' },
-  { value: 'created-desc',     label: 'Created (newest)'  },
-  { value: 'created-asc',      label: 'Created (oldest)'  },
-  { value: 'name-asc',         label: 'Name (A→Z)'        },
-  { value: 'name-desc',        label: 'Name (Z→A)'        },
-  { value: 'frontmatter-asc',  label: 'Frontmatter field (asc)'  },
-  { value: 'frontmatter-desc', label: 'Frontmatter field (desc)' },
+// src/settings.ts
+var DEFAULT_SETTINGS = {
+  commands: [],
+  objectTypes: [],
+  templatesFolder: "",
+  triggerKey: "",
+  ffwSections: [],
+  ffwDisplayNameKey: ""
+};
+var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.addClass("ffc-settings");
+    containerEl.createEl("h2", { text: "Filtered File Commands" });
+    containerEl.createEl("p", {
+      text: "Each command opens a fuzzy file picker showing only files whose frontmatter properties match your filters.",
+      cls: "ffc-settings-desc"
+    });
+    for (let i = 0; i < this.plugin.settings.commands.length; i++) {
+      this.renderCommand(containerEl, i);
+    }
+    new import_obsidian5.Setting(containerEl).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add New Command").setCta().onClick(async () => {
+        const id = `ffc-command-${Date.now()}`;
+        this.plugin.settings.commands.push({ id, name: "New Filtered Command", matchMode: "all", filters: [] });
+        await this.plugin.saveSettings();
+        this.plugin.registerFilterCommand(this.plugin.settings.commands[this.plugin.settings.commands.length - 1]);
+        this.display();
+      })
+    );
+    containerEl.createEl("hr", { cls: "ffc-divider" });
+    containerEl.createEl("h2", { text: "General" });
+    containerEl.createEl("p", {
+      text: 'Define object types to get "Create new \u2026" commands in the palette.',
+      cls: "ffc-settings-desc"
+    });
+    new import_obsidian5.Setting(containerEl).setName("Trigger key").setDesc('Character that opens the inline object picker while editing (e.g. "@"). Leave blank to disable.').addText(
+      (text) => text.setPlaceholder("e.g. @").setValue(this.plugin.settings.triggerKey || "").onChange(async (value) => {
+        this.plugin.settings.triggerKey = value.trim().slice(0, 1);
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian5.Setting(containerEl).setName("Templates folder").setDesc('Path to your templates folder (e.g. "Templates"). Leave blank to auto-detect from the core Templates plugin.').addText(
+      (text) => text.setPlaceholder("Templates").setValue(this.plugin.settings.templatesFolder || "").onChange(async (value) => {
+        this.plugin.settings.templatesFolder = value.trim();
+        await this.plugin.saveSettings();
+      })
+    );
+    containerEl.createEl("hr", { cls: "ffc-divider" });
+    const objTypesHeader = containerEl.createDiv({ cls: "ffc-section-header" });
+    objTypesHeader.createEl("h2", { text: "Object Types", cls: "ffc-section-header-title" });
+    const addObjTypeBtn = objTypesHeader.createEl("button", {
+      cls: "clickable-icon ffc-btn-add",
+      attr: { title: "Add object type", "aria-label": "Add object type" }
+    });
+    (0, import_obsidian5.setIcon)(addObjTypeBtn, "plus");
+    addObjTypeBtn.onclick = async () => {
+      const id = `ffc-objtype-${Date.now()}`;
+      const takenSlugs = new Set(this.plugin.settings.objectTypes.map((o) => o.commandSlug).filter(Boolean));
+      const baseSlug = nameToCommandSlug("New Object");
+      let newSlug = baseSlug;
+      let slugN = 2;
+      while (takenSlugs.has(newSlug))
+        newSlug = `${baseSlug}-${slugN++}`;
+      this.plugin.settings.objectTypes.push({
+        id,
+        commandSlug: newSlug,
+        name: "New Object",
+        templatePath: "",
+        saveFolder: "",
+        fields: [],
+        matchFilters: [],
+        matchMode: "all",
+        enableFindCommand: false,
+        showInTriggerMenu: false,
+        previewFields: [],
+        canvasFields: []
+      });
+      await this.plugin.saveSettings();
+      this.plugin.registerObjectTypeCommand(this.plugin.settings.objectTypes[this.plugin.settings.objectTypes.length - 1]);
+      this.display();
+    };
+    const objTypesList = containerEl.createDiv({ cls: "setting-group ffc-objtype-list" });
+    if (this.plugin.settings.objectTypes.length === 0) {
+      objTypesList.createEl("p", { text: "No object types yet. Select + to add one.", cls: "ffc-hint ffc-objtype-empty" });
+    } else {
+      for (let i = 0; i < this.plugin.settings.objectTypes.length; i++) {
+        this.renderObjectTypeRow(objTypesList, i);
+      }
+    }
+    containerEl.createEl("hr", { cls: "ffc-divider" });
+    containerEl.createEl("h2", { text: "Filtered Files Widget" });
+    containerEl.createEl("p", {
+      text: "A sidebar panel that shows lists of files matching configurable filter rules. Open it and select + to create your first filter section.",
+      cls: "ffc-settings-desc"
+    });
+    new import_obsidian5.Setting(containerEl).setName("Open the widget").setDesc("Reveal the filtered files widget in the left sidebar.").addButton((btn) => btn.setButtonText("Open widget").setCta().onClick(() => {
+      this.plugin.activateWidgetView();
+    }));
+    new import_obsidian5.Setting(containerEl).setName("Display name frontmatter key").setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.').addText(
+      (text) => text.setPlaceholder("e.g. title").setValue(this.plugin.settings.ffwDisplayNameKey).onChange(async (v) => {
+        this.plugin.settings.ffwDisplayNameKey = v.trim();
+        await this.plugin.saveSettings();
+        this.plugin.refreshWidgetViews();
+      })
+    );
+    new import_obsidian5.Setting(containerEl).setName("Reset all filter sections").setDesc("Remove every filter section from the widget. This cannot be undone.").addButton((btn) => btn.setButtonText("Reset").setWarning().onClick(async () => {
+      this.plugin.settings.ffwSections = [];
+      await this.plugin.saveSettings();
+      this.plugin.refreshWidgetViews();
+    }));
+  }
+  // ── Filtered command block ────────────────────────────────────────────────────
+  renderCommand(containerEl, index) {
+    const cmd = this.plugin.settings.commands[index];
+    const block = containerEl.createDiv({ cls: "ffc-command-block" });
+    const header = block.createDiv({ cls: "ffc-command-header" });
+    header.createEl("span", { text: `Command ${index + 1}`, cls: "ffc-command-label" });
+    header.createEl("button", { text: "\u2715 Remove", cls: "mod-warning" }).onclick = async () => {
+      this.plugin.settings.commands.splice(index, 1);
+      await this.plugin.saveSettings();
+      this.display();
+    };
+    new import_obsidian5.Setting(block).setName("Command name").setDesc("Shown in the command palette and hotkey settings.").addText(
+      (text) => text.setPlaceholder("e.g. Show Active Projects").setValue(cmd.name).onChange(async (value) => {
+        cmd.name = value;
+        await this.plugin.saveSettings();
+        const ref = this.plugin.commandRefs[cmd.id];
+        if (ref)
+          ref.name = value;
+      })
+    );
+    new import_obsidian5.Setting(block).setName("Filter match mode").setDesc("Should a file match ALL filters (AND) or at least ONE filter (OR)?").addDropdown(
+      (dd) => dd.addOption("all", "Match ALL filters (AND)").addOption("any", "Match ANY filter (OR)").setValue(cmd.matchMode).onChange(async (value) => {
+        cmd.matchMode = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian5.Setting(block).setName("File types").setDesc("Comma-separated extensions (e.g. md, canvas). Leave blank for markdown only.").addText(
+      (text) => text.setPlaceholder("md, canvas").setValue(cmd.fileTypes || "").onChange(async (value) => {
+        cmd.fileTypes = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    const filtersSection = block.createDiv({ cls: "ffc-filters-section" });
+    filtersSection.createEl("p", { text: "Frontmatter Filters", cls: "ffc-filters-title" });
+    if (cmd.filters.length === 0) {
+      filtersSection.createEl("p", { text: "No filters \u2014 all files of the specified type(s) will be shown.", cls: "ffc-hint" });
+    }
+    for (let fi = 0; fi < cmd.filters.length; fi++)
+      this.renderFilter(filtersSection, index, fi);
+    new import_obsidian5.Setting(filtersSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Filter").onClick(async () => {
+        cmd.filters.push({ key: "", operator: "equals", value: "" });
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+  }
+  renderFilter(container, cmdIndex, filterIndex) {
+    const cmd = this.plugin.settings.commands[cmdIndex];
+    const filter = cmd.filters[filterIndex];
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+    keyInput.type = "text";
+    keyInput.placeholder = "Property key";
+    keyInput.value = filter.key;
+    keyInput.addEventListener("change", async () => {
+      filter.key = keyInput.value.trim();
+      await this.plugin.saveSettings();
+    });
+    const opSelect = row.createEl("select", { cls: "ffc-select" });
+    for (const op of [{ value: "equals", label: "=" }, { value: "not_equals", label: "\u2260" }, { value: "contains", label: "contains" }, { value: "exists", label: "exists" }]) {
+      const opt = opSelect.createEl("option", { text: op.label, value: op.value });
+      if (filter.operator === op.value)
+        opt.selected = true;
+    }
+    opSelect.addEventListener("change", async () => {
+      filter.operator = opSelect.value;
+      await this.plugin.saveSettings();
+      this.display();
+    });
+    if (filter.operator !== "exists") {
+      const valInput = row.createEl("input", { cls: "ffc-input ffc-input-val" });
+      valInput.type = "text";
+      valInput.placeholder = "Value";
+      valInput.value = filter.value;
+      valInput.addEventListener("change", async () => {
+        filter.value = valInput.value;
+        await this.plugin.saveSettings();
+      });
+    }
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
+      cmd.filters.splice(filterIndex, 1);
+      await this.plugin.saveSettings();
+      this.display();
+    };
+  }
+  // ── Object type compact row ───────────────────────────────────────────────────
+  renderObjectTypeRow(containerEl, index) {
+    const obj = this.plugin.settings.objectTypes[index];
+    const row = containerEl.createDiv({ cls: "ffc-objtype-row" });
+    row.onclick = (e) => {
+      if (!e.target.closest(".ffc-objtype-row-actions")) {
+        new ObjectTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+      }
+    };
+    const info = row.createDiv({ cls: "ffc-objtype-row-info" });
+    info.createEl("div", { text: obj.name || "Unnamed", cls: "ffc-objtype-row-name" });
+    if (obj.description) {
+      info.createEl("div", { text: obj.description, cls: "ffc-objtype-row-desc" });
+    }
+    const actions = row.createDiv({ cls: "ffc-objtype-row-actions" });
+    const gearBtn = actions.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Edit settings" } });
+    (0, import_obsidian5.setIcon)(gearBtn, "settings");
+    gearBtn.onclick = () => {
+      new ObjectTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+    };
+    const trashBtn = actions.createEl("button", { cls: "clickable-icon ffc-btn-icon-danger", attr: { "aria-label": "Delete object type" } });
+    (0, import_obsidian5.setIcon)(trashBtn, "trash-2");
+    trashBtn.onclick = () => {
+      new ObjectTypeDeleteModal(this.app, this.plugin, index, () => this.display()).open();
+    };
+  }
+};
+
+// src/utils/ffw-utils.ts
+var import_obsidian6 = require("obsidian");
+var FFW_VIEW_TYPE = "filtered-files-widget-view";
+var FFW_FILTER_TYPE_LABELS = {
+  tag: "Tag",
+  frontmatter: "Frontmatter",
+  path: "Path / folder",
+  name: "File name"
+};
+var FFW_SORT_OPTIONS = [
+  { value: "modified-desc", label: "Modified (newest)" },
+  { value: "modified-asc", label: "Modified (oldest)" },
+  { value: "created-desc", label: "Created (newest)" },
+  { value: "created-asc", label: "Created (oldest)" },
+  { value: "name-asc", label: "Name (A\u2192Z)" },
+  { value: "name-desc", label: "Name (Z\u2192A)" },
+  { value: "frontmatter-asc", label: "Frontmatter field (asc)" },
+  { value: "frontmatter-desc", label: "Frontmatter field (desc)" }
 ];
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function ffwNewSectionId() {
   return `sec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
-
 function ffwDefaultFilter(type) {
   switch (type) {
-    case 'tag':         return { type: 'tag',         tag: '',      include: true };
-    case 'frontmatter': return { type: 'frontmatter', key: '',      value: '', comparison: 'equals' };
-    case 'path':        return { type: 'path',        pattern: '',  matchMode: 'starts-with', negate: false };
-    case 'name':        return { type: 'name',        pattern: '',  matchMode: 'contains', caseSensitive: false, negate: false };
+    case "tag":
+      return { type: "tag", tag: "", include: true };
+    case "frontmatter":
+      return { type: "frontmatter", key: "", value: "", comparison: "equals" };
+    case "path":
+      return { type: "path", pattern: "", matchMode: "starts-with", negate: false };
+    case "name":
+      return { type: "name", pattern: "", matchMode: "contains", caseSensitive: false, negate: false };
   }
 }
-
-function ffwDefaultSort() { return { field: 'modified-desc' }; }
-
+function ffwDefaultSort() {
+  return { field: "modified-desc" };
+}
 function ffwSortLabel(sort) {
+  var _a, _b;
   switch (sort.field) {
-    case 'created-desc':     return 'Created (newest)';
-    case 'created-asc':      return 'Created (oldest)';
-    case 'modified-desc':    return 'Modified (newest)';
-    case 'modified-asc':     return 'Modified (oldest)';
-    case 'name-asc':         return 'Name (A-Z)';
-    case 'name-desc':        return 'Name (Z-A)';
-    case 'frontmatter-asc':  return `Frontmatter "${sort.frontmatterKey ?? ''}" (asc)`;
-    case 'frontmatter-desc': return `Frontmatter "${sort.frontmatterKey ?? ''}" (desc)`;
-    default:                 return sort.field;
+    case "created-desc":
+      return "Created (newest)";
+    case "created-asc":
+      return "Created (oldest)";
+    case "modified-desc":
+      return "Modified (newest)";
+    case "modified-asc":
+      return "Modified (oldest)";
+    case "name-asc":
+      return "Name (A-Z)";
+    case "name-desc":
+      return "Name (Z-A)";
+    case "frontmatter-asc":
+      return `Frontmatter "${(_a = sort.frontmatterKey) != null ? _a : ""}" (asc)`;
+    case "frontmatter-desc":
+      return `Frontmatter "${(_b = sort.frontmatterKey) != null ? _b : ""}" (desc)`;
+    default:
+      return sort.field;
   }
 }
-
-/** Fuzzy match: every character in `query` must appear in `str` in order. */
 function ffwFuzzyMatch(query, str) {
-  if (!query) return true;
+  if (!query)
+    return true;
   const q = query.toLowerCase();
   const s = str.toLowerCase();
   let n = 0;
   for (let i = 0; i < s.length && n < q.length; i++) {
-    if (s[i] === q[n]) n++;
+    if (s[i] === q[n])
+      n++;
   }
   return n === q.length;
 }
-
-/** Read a file's icon/color from the Iconic plugin if installed. */
 function ffwGetIconicIcon(app, file) {
+  var _a, _b, _c, _d;
   try {
-    const plugins = app.plugins?.plugins;
-    if (!plugins) return null;
+    const plugins = (_a = app.plugins) == null ? void 0 : _a.plugins;
+    if (!plugins)
+      return null;
     const iconic = plugins.iconic;
-    if (!iconic) return null;
-    if (typeof iconic.getFileItem === 'function') {
+    if (!iconic)
+      return null;
+    if (typeof iconic.getFileItem === "function") {
       const item = iconic.getFileItem(file.path);
-      if (item?.icon) return item;
+      if (item == null ? void 0 : item.icon)
+        return item;
     }
     const lm = iconic.ruleManager;
-    if (lm?.fileRulings instanceof Map) {
+    if ((lm == null ? void 0 : lm.fileRulings) instanceof Map) {
       const c = lm.fileRulings.get(file.path);
       if (c) {
-        const icon = c.icon ?? c.iconDefault ?? null;
-        if (icon) return { icon, color: c.color ?? null };
+        const icon = (_c = (_b = c.icon) != null ? _b : c.iconDefault) != null ? _c : null;
+        if (icon)
+          return { icon, color: (_d = c.color) != null ? _d : null };
       }
     }
     for (const src of [iconic.settings, iconic.data]) {
-      if (!src) continue;
-      for (const key of ['fileIcons', 'file', 'files']) {
+      if (!src)
+        continue;
+      for (const key of ["fileIcons", "file", "files"]) {
         const store = src[key];
-        if (!store) continue;
+        if (!store)
+          continue;
         const entry = store[file.path];
-        if (entry?.icon) return entry;
+        if (entry == null ? void 0 : entry.icon)
+          return entry;
       }
     }
-  } catch {}
+  } catch (e) {
+  }
   return null;
 }
-
-/** Render an icon string (Lucide id or emoji) into an element, with optional color. */
 function ffwSetIconEl(el, icon, color) {
+  const { setIcon: setIcon5 } = require("obsidian");
   if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon)) {
-    obsidian.setIcon(el, icon);
+    setIcon5(el, icon);
   } else {
     el.setText(icon);
-    el.addClass('ffw-file-icon--emoji');
+    el.addClass("ffw-file-icon--emoji");
   }
-  if (color) el.style.color = color;
+  if (color)
+    el.style.color = color;
 }
-
-/** Coerce a raw frontmatter value to a string for comparisons / display. */
 function ffwFormatValue(v) {
-  if (v == null) return '';
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
-  try { return JSON.stringify(v); } catch { return ''; }
+  if (v == null)
+    return "";
+  if (typeof v === "string")
+    return v;
+  if (typeof v === "number" || typeof v === "boolean")
+    return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch (e) {
+    return "";
+  }
 }
-
-/** Normalise a tag string: trim, strip leading #, lower-case. */
 function ffwNormalizeTag(tag) {
-  return (tag || '').trim().replace(/^#/, '').toLowerCase();
+  return (tag || "").trim().replace(/^#/, "").toLowerCase();
 }
-
-// ── Per-filter evaluators ─────────────────────────────────────────────────────
-
 function ffwEvalTagFilter(cache, filter) {
+  var _a;
   const tag = ffwNormalizeTag(filter.tag);
-  if (!tag) return true;
-  const allTags = cache ? (obsidian.getAllTags(cache) ?? []).map(ffwNormalizeTag) : [];
+  if (!tag)
+    return true;
+  const allTags = cache ? ((_a = (0, import_obsidian6.getAllTags)(cache)) != null ? _a : []).map(ffwNormalizeTag) : [];
   const has = allTags.includes(tag);
   return filter.include ? has : !has;
 }
-
 function ffwEvalFrontmatterFilter(cache, filter) {
-  if (!filter.key) return true;
-  const fm = cache?.frontmatter;
-  if (!fm) return filter.comparison === 'not-equals';
+  if (!filter.key)
+    return true;
+  const fm = cache == null ? void 0 : cache.frontmatter;
+  if (!fm)
+    return filter.comparison === "not-equals";
   const raw = fm[filter.key];
-  if (filter.comparison === 'exists') return raw != null && raw !== '';
-  if (raw == null) return filter.comparison === 'not-equals';
+  if (filter.comparison === "exists")
+    return raw != null && raw !== "";
+  if (raw == null)
+    return filter.comparison === "not-equals";
   const needle = filter.value.trim().toLowerCase();
   const values = Array.isArray(raw) ? raw.map(ffwFormatValue) : [ffwFormatValue(raw)];
   switch (filter.comparison) {
-    case 'equals':     return values.some((v) => v.toLowerCase() === needle);
-    case 'not-equals': return !values.some((v) => v.toLowerCase() === needle);
-    case 'contains':   return values.some((v) => v.toLowerCase().includes(needle));
-    default:           return true;
+    case "equals":
+      return values.some((v) => v.toLowerCase() === needle);
+    case "not-equals":
+      return !values.some((v) => v.toLowerCase() === needle);
+    case "contains":
+      return values.some((v) => v.toLowerCase().includes(needle));
+    default:
+      return true;
   }
 }
-
 function ffwEvalPathFilter(file, filter) {
-  if (!filter.pattern) return true;
-  const path    = file.path;
+  if (!filter.pattern)
+    return true;
+  const path = file.path;
   const pattern = filter.pattern;
   let matches;
   switch (filter.matchMode) {
-    case 'starts-with': matches = path.startsWith(pattern); break;
-    case 'ends-with':   matches = path.endsWith(pattern);   break;
-    case 'equals':      matches = path === pattern;         break;
-    case 'contains':    matches = path.includes(pattern);   break;
-    default:            matches = false;
+    case "starts-with":
+      matches = path.startsWith(pattern);
+      break;
+    case "ends-with":
+      matches = path.endsWith(pattern);
+      break;
+    case "equals":
+      matches = path === pattern;
+      break;
+    case "contains":
+      matches = path.includes(pattern);
+      break;
+    default:
+      matches = false;
   }
   return filter.negate ? !matches : matches;
 }
-
 function ffwEvalNameFilter(file, filter) {
-  if (!filter.pattern) return true;
-  const name    = filter.caseSensitive ? file.basename : file.basename.toLowerCase();
+  if (!filter.pattern)
+    return true;
+  const name = filter.caseSensitive ? file.basename : file.basename.toLowerCase();
   const pattern = filter.caseSensitive ? filter.pattern : filter.pattern.toLowerCase();
   let matches;
   switch (filter.matchMode) {
-    case 'contains':    matches = name.includes(pattern);    break;
-    case 'starts-with': matches = name.startsWith(pattern);  break;
-    case 'ends-with':   matches = name.endsWith(pattern);    break;
-    case 'regex':
-      try { matches = new RegExp(filter.pattern, filter.caseSensitive ? '' : 'i').test(file.basename); }
-      catch { matches = false; }
+    case "contains":
+      matches = name.includes(pattern);
       break;
-    default: matches = false;
+    case "starts-with":
+      matches = name.startsWith(pattern);
+      break;
+    case "ends-with":
+      matches = name.endsWith(pattern);
+      break;
+    case "regex":
+      try {
+        matches = new RegExp(filter.pattern, filter.caseSensitive ? "" : "i").test(file.basename);
+      } catch (e) {
+        matches = false;
+      }
+      break;
+    default:
+      matches = false;
   }
   return filter.negate ? !matches : matches;
 }
-
 function ffwApplyFilter(file, cache, filter) {
   switch (filter.type) {
-    case 'tag':         return ffwEvalTagFilter(cache, filter);
-    case 'frontmatter': return ffwEvalFrontmatterFilter(cache, filter);
-    case 'path':        return ffwEvalPathFilter(file, filter);
-    case 'name':        return ffwEvalNameFilter(file, filter);
-    default:            return true;
+    case "tag":
+      return ffwEvalTagFilter(cache, filter);
+    case "frontmatter":
+      return ffwEvalFrontmatterFilter(cache, filter);
+    case "path":
+      return ffwEvalPathFilter(file, filter);
+    case "name":
+      return ffwEvalNameFilter(file, filter);
+    default:
+      return true;
   }
 }
-
-// ── File retrieval & sorting ──────────────────────────────────────────────────
-
 function ffwGetFrontmatterSortValue(app, file, key) {
-  const fm = app.metadataCache.getFileCache(file)?.frontmatter;
-  if (!fm) return undefined;
+  var _a;
+  const fm = (_a = app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+  if (!fm)
+    return void 0;
   const val = fm[key];
-  if (val == null || val === '') return undefined;
-  return typeof val === 'number' || typeof val === 'string'
-    ? val
-    : Array.isArray(val) ? val.map(ffwFormatValue).join(', ')
-    : ffwFormatValue(val);
+  if (val == null || val === "")
+    return void 0;
+  return typeof val === "number" || typeof val === "string" ? val : Array.isArray(val) ? val.map(ffwFormatValue).join(", ") : ffwFormatValue(val);
 }
-
 function ffwSortFiles(files, app, sort) {
   const arr = files.slice();
   switch (sort.field) {
-    case 'created-desc':  return arr.sort((a, b) => b.stat.ctime - a.stat.ctime);
-    case 'created-asc':   return arr.sort((a, b) => a.stat.ctime - b.stat.ctime);
-    case 'modified-desc': return arr.sort((a, b) => b.stat.mtime - a.stat.mtime);
-    case 'modified-asc':  return arr.sort((a, b) => a.stat.mtime - b.stat.mtime);
-    case 'name-asc':      return arr.sort((a, b) => a.basename.localeCompare(b.basename, undefined, { sensitivity: 'base' }));
-    case 'name-desc':     return arr.sort((a, b) => b.basename.localeCompare(a.basename, undefined, { sensitivity: 'base' }));
-    case 'frontmatter-asc':
-    case 'frontmatter-desc': {
+    case "created-desc":
+      return arr.sort((a, b) => b.stat.ctime - a.stat.ctime);
+    case "created-asc":
+      return arr.sort((a, b) => a.stat.ctime - b.stat.ctime);
+    case "modified-desc":
+      return arr.sort((a, b) => b.stat.mtime - a.stat.mtime);
+    case "modified-asc":
+      return arr.sort((a, b) => a.stat.mtime - b.stat.mtime);
+    case "name-asc":
+      return arr.sort((a, b) => a.basename.localeCompare(b.basename, void 0, { sensitivity: "base" }));
+    case "name-desc":
+      return arr.sort((a, b) => b.basename.localeCompare(a.basename, void 0, { sensitivity: "base" }));
+    case "frontmatter-asc":
+    case "frontmatter-desc": {
       const key = sort.frontmatterKey;
-      if (!key) return arr;
-      const dir = sort.field === 'frontmatter-asc' ? 1 : -1;
+      if (!key)
+        return arr;
+      const dir = sort.field === "frontmatter-asc" ? 1 : -1;
       return arr.sort((a, b) => {
         const va = ffwGetFrontmatterSortValue(app, a, key);
         const vb = ffwGetFrontmatterSortValue(app, b, key);
-        if (va === undefined && vb === undefined) return 0;
-        if (va === undefined) return 1;
-        if (vb === undefined) return -1;
-        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-        return String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' }) * dir;
+        if (va === void 0 && vb === void 0)
+          return 0;
+        if (va === void 0)
+          return 1;
+        if (vb === void 0)
+          return -1;
+        if (typeof va === "number" && typeof vb === "number")
+          return (va - vb) * dir;
+        return String(va).localeCompare(String(vb), void 0, { sensitivity: "base" }) * dir;
       });
     }
-    default: return arr;
+    default:
+      return arr;
   }
 }
-
 function ffwGetSectionFiles(app, section) {
   const files = app.vault.getMarkdownFiles().filter((file) => {
     const cache = app.metadataCache.getFileCache(file);
@@ -1126,427 +1174,996 @@ function ffwGetSectionFiles(app, section) {
   return section.maxResults && section.maxResults > 0 ? sorted.slice(0, section.maxResults) : sorted;
 }
 
-// ── Section edit modal ────────────────────────────────────────────────────────
+// src/ui/filtered-file-modal.ts
+var import_obsidian7 = require("obsidian");
+var FilteredFileModal = class extends import_obsidian7.FuzzySuggestModal {
+  constructor(app, files, typeName) {
+    super(app);
+    this.files = files;
+    this.setPlaceholder(typeName ? `Search ${typeName}\u2026` : "Type to search filtered files\u2026");
+    this.setInstructions([
+      { command: "\u2191\u2193", purpose: "navigate" },
+      { command: "\u21B5", purpose: "open" },
+      { command: "esc", purpose: "dismiss" }
+    ]);
+  }
+  getTitle(file) {
+    var _a;
+    const cache = this.app.metadataCache.getFileCache(file);
+    const title = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a["title"];
+    return title ? String(title) : file.basename;
+  }
+  getItems() {
+    return this.files;
+  }
+  getItemText(file) {
+    return this.getTitle(file);
+  }
+  renderSuggestion(match, el) {
+    var _a;
+    const file = match.item;
+    el.createEl("span", { text: this.getTitle(file), cls: "suggestion-title" });
+    const folder = (_a = file.parent) == null ? void 0 : _a.path;
+    if (folder && folder !== "/") {
+      el.createEl("span", { text: folder, cls: "suggestion-note" });
+    }
+  }
+  onChooseItem(file) {
+    this.app.workspace.getLeaf(false).openFile(file);
+  }
+};
 
-class FfwSectionEditModal extends obsidian.Modal {
+// src/ui/new-object-modal.ts
+var import_obsidian8 = require("obsidian");
+var NewObjectModal = class extends import_obsidian8.Modal {
+  constructor(app, objType, onSubmit, initialTitle = "") {
+    super(app);
+    this.fieldValues = {};
+    this.descriptionValue = "";
+    this.objType = objType;
+    this.onSubmit = onSubmit;
+    this.titleValue = initialTitle;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("ffc-new-object-modal");
+    contentEl.createEl("h2", { text: `New ${this.objType.name}` });
+    new import_obsidian8.Setting(contentEl).setName("Title").addText((text) => {
+      text.setPlaceholder(`Enter ${this.objType.name} title\u2026`).setValue(this.titleValue).onChange((v) => {
+        this.titleValue = v;
+      });
+      text.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter")
+          this.submit();
+        if (e.key === "Escape")
+          this.close();
+      });
+      setTimeout(() => {
+        text.inputEl.focus();
+        text.inputEl.select();
+      }, 50);
+    });
+    const descSetting = new import_obsidian8.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+      ta.setPlaceholder("Optional description\u2026").onChange((v) => {
+        this.descriptionValue = v;
+      });
+      ta.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Escape")
+          this.close();
+      });
+    });
+    renderFieldInputs(contentEl, this.app, this.objType, this.fieldValues, () => this.submit(), descSetting.settingEl);
+    new import_obsidian8.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+  }
+  submit() {
+    const title = this.titleValue.trim();
+    if (!title) {
+      new import_obsidian8.Notice("Please enter a title.");
+      return;
+    }
+    this.close();
+    this.onSubmit(title, this.fieldValues, this.descriptionValue);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/ui/combined-new-object-modal.ts
+var import_obsidian9 = require("obsidian");
+var CombinedNewObjectModal = class extends import_obsidian9.Modal {
+  constructor(app, objectTypes, onSubmit) {
+    super(app);
+    this.titleValue = "";
+    this.fieldValues = {};
+    this.descriptionValue = "";
+    this.objectTypes = objectTypes;
+    this.selectedType = objectTypes[0];
+    this.onSubmit = onSubmit;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("ffc-new-object-modal");
+    contentEl.createEl("h2", { text: "New Object" });
+    let descSettingEl = null;
+    new import_obsidian9.Setting(contentEl).setName("Type").addDropdown((dd) => {
+      for (const obj of this.objectTypes)
+        dd.addOption(obj.id, obj.name);
+      dd.setValue(this.selectedType.id);
+      dd.onChange((id) => {
+        var _a;
+        this.selectedType = (_a = this.objectTypes.find((o) => o.id === id)) != null ? _a : this.objectTypes[0];
+        this.fieldValues = {};
+        renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
+      });
+    });
+    new import_obsidian9.Setting(contentEl).setName("Title").addText((text) => {
+      text.setPlaceholder("Enter title\u2026").onChange((v) => {
+        this.titleValue = v;
+      });
+      text.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter")
+          this.submit();
+        if (e.key === "Escape")
+          this.close();
+      });
+      setTimeout(() => text.inputEl.focus(), 50);
+    });
+    const descSetting = new import_obsidian9.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+      ta.setPlaceholder("Optional description\u2026").onChange((v) => {
+        this.descriptionValue = v;
+      });
+      ta.inputEl.addEventListener("keydown", (e) => {
+        if (e.key === "Escape")
+          this.close();
+      });
+    });
+    descSettingEl = descSetting.settingEl;
+    renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
+    new import_obsidian9.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+  }
+  submit() {
+    const title = this.titleValue.trim();
+    if (!title) {
+      new import_obsidian9.Notice("Please enter a title.");
+      return;
+    }
+    this.close();
+    this.onSubmit(this.selectedType, title, this.fieldValues, this.descriptionValue);
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
+// src/ui/object-type-suggest.ts
+var import_obsidian10 = require("obsidian");
+var ObjectTypeSuggest = class extends import_obsidian10.EditorSuggest {
+  constructor(app, plugin) {
+    super(app);
+    this.plugin = plugin;
+  }
+  onTrigger(cursor, editor) {
+    const triggerKey = this.plugin.settings.triggerKey;
+    if (!triggerKey)
+      return null;
+    const line = editor.getLine(cursor.line);
+    const sub = line.substring(0, cursor.ch);
+    const triggerIndex = sub.lastIndexOf(triggerKey);
+    if (triggerIndex === -1)
+      return null;
+    const query = sub.substring(triggerIndex + triggerKey.length);
+    const beforeTrigger = sub.substring(0, triggerIndex);
+    if (beforeTrigger.includes("[[") && !beforeTrigger.includes("]]"))
+      return null;
+    return {
+      start: { line: cursor.line, ch: triggerIndex },
+      end: cursor,
+      query
+    };
+  }
+  getSuggestions(context) {
+    const query = context.query.toLowerCase();
+    const files = this._getMatchingFiles();
+    return files.map((file) => {
+      var _a;
+      const cache = this.app.metadataCache.getFileCache(file);
+      const title = ((_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a["title"]) ? String(cache.frontmatter["title"]) : file.basename;
+      return { file, title };
+    }).filter(({ title }) => title.toLowerCase().includes(query)).sort((a, b) => {
+      const aStarts = a.title.toLowerCase().startsWith(query) ? 0 : 1;
+      const bStarts = b.title.toLowerCase().startsWith(query) ? 0 : 1;
+      return aStarts - bStarts || a.title.localeCompare(b.title);
+    }).slice(0, 30);
+  }
+  _getMatchingFiles() {
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    for (const objType of this.plugin.settings.objectTypes) {
+      if (!objType.showInTriggerMenu)
+        continue;
+      for (const file of this.plugin.getObjectTypeFiles(objType)) {
+        if (!seen.has(file.path)) {
+          seen.add(file.path);
+          result.push(file);
+        }
+      }
+    }
+    return result;
+  }
+  renderSuggestion({ file, title }, el) {
+    var _a;
+    el.createEl("span", { text: title, cls: "suggestion-title" });
+    const folder = (_a = file.parent) == null ? void 0 : _a.path;
+    if (folder && folder !== "/") {
+      el.createEl("span", { text: folder, cls: "suggestion-note" });
+    }
+  }
+  selectSuggestion({ file, title }) {
+    const context = this.context;
+    if (!context)
+      return;
+    const link = title !== file.basename ? `[[${file.basename}|${title}]]` : `[[${file.basename}]]`;
+    context.editor.replaceRange(link, context.start, context.end);
+  }
+};
+
+// src/ui/object-preview-popup.ts
+var ObjectPreviewPopup = class {
+  constructor(plugin) {
+    this.popup = null;
+    this.hideTimer = null;
+    this.showTimer = null;
+    this._currentFile = null;
+    this.plugin = plugin;
+    this._onMouseOver = (e) => this._handleMouseOver(e);
+    this._onMouseOut = (e) => this._handleMouseOut(e);
+    document.addEventListener("mouseover", this._onMouseOver, true);
+    document.addEventListener("mouseout", this._onMouseOut, true);
+    const leafChangeRef = plugin.app.workspace.on("active-leaf-change", () => this.hide());
+    plugin.registerEvent(leafChangeRef);
+  }
+  // ── Mouse event handlers ──────────────────────────────────────────────────────
+  _handleMouseOver(e) {
+    var _a, _b, _c;
+    if (this.popup && this.popup.contains(e.target))
+      return;
+    const el = e.target;
+    let linkpath = null;
+    const anchor = el.matches("a.internal-link[data-href]") ? el : el.closest("a.internal-link[data-href]");
+    if (anchor) {
+      linkpath = ((_a = anchor.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
+    }
+    if (!linkpath) {
+      const cmSpan = el.classList.contains("cm-hmd-internal-link") ? el : el.closest(".cm-hmd-internal-link");
+      if (cmSpan) {
+        linkpath = ((_b = cmSpan.textContent) != null ? _b : "").replace(/^\[\[/, "").replace(/\]\]$/, "").split("|")[0].split("#")[0].trim();
+      }
+    }
+    if (!linkpath)
+      return;
+    const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, "");
+    if (!file)
+      return;
+    const objType = this._getObjectTypeForFile(file);
+    if (!objType)
+      return;
+    if (this.hideTimer)
+      clearTimeout(this.hideTimer);
+    if (this.showTimer)
+      clearTimeout(this.showTimer);
+    if (this.popup && this._currentFile === file)
+      return;
+    const triggerEl = (_c = anchor != null ? anchor : el.closest(".cm-hmd-internal-link")) != null ? _c : null;
+    this.showTimer = setTimeout(() => {
+      this._showForFile(file, objType, e.clientX, e.clientY, triggerEl);
+    }, 280);
+  }
+  _handleMouseOut(e) {
+    if (this.showTimer)
+      clearTimeout(this.showTimer);
+    const toEl = e.relatedTarget;
+    if (this.popup && toEl && this.popup.contains(toEl))
+      return;
+    this.hideTimer = setTimeout(() => this.hide(), 200);
+  }
+  // ── Build and position the popup ──────────────────────────────────────────────
+  async _showForFile(file, objType, clientX, clientY, triggerEl) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const hasFields = ((_b = (_a = objType.previewFields) == null ? void 0 : _a.length) != null ? _b : 0) > 0;
+    const hasImage = !!(objType.showImageInPreview && objType.imageKey);
+    if (!hasFields && !hasImage)
+      return;
+    const app = this.plugin.app;
+    const fm = (_d = (_c = app.metadataCache.getFileCache(file)) == null ? void 0 : _c.frontmatter) != null ? _d : {};
+    const title = fm["title"] ? String(fm["title"]) : file.basename;
+    this.hide();
+    const popup = document.createElement("div");
+    popup.className = "ffc-preview-popup";
+    if (hasImage && objType.imageKey) {
+      const rawImg = fm[objType.imageKey];
+      const imgSrc = rawImg ? await this._resolveImageSrc(String(rawImg).trim(), app) : null;
+      if (imgSrc) {
+        const imgEl = popup.createEl("img", { cls: "ffc-preview-image" });
+        imgEl.src = imgSrc;
+        imgEl.alt = title;
+      }
+    }
+    const header = popup.createDiv({ cls: "ffc-preview-header" });
+    header.createEl("span", { text: title, cls: "ffc-preview-title" });
+    popup.createEl("hr", { cls: "ffc-preview-divider" });
+    const body = popup.createDiv({ cls: "ffc-preview-body" });
+    let hasRows = false;
+    const renderValue = (valueEl, str) => {
+      const wikiMatch = String(str).match(/^\[\[(.+?)(?:\|(.+?))?\]\]$/);
+      if (wikiMatch) {
+        const linkPath = wikiMatch[1];
+        const linkLabel = wikiMatch[2] || wikiMatch[1];
+        const a = valueEl.createEl("a", { text: linkLabel, cls: "ffc-preview-wikilink internal-link" });
+        a.dataset["href"] = linkPath;
+        a.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.hide();
+          app.workspace.openLinkText(linkPath, "", false);
+        });
+      } else {
+        valueEl.appendText(String(str));
+      }
+    };
+    for (const pf of (_e = objType.previewFields) != null ? _e : []) {
+      const key = typeof pf === "string" ? pf : (_f = pf.key) != null ? _f : "";
+      const label = (typeof pf === "string" ? pf : pf.label || pf.key) || key;
+      if (!key)
+        continue;
+      const raw = fm[key];
+      if (raw === void 0 || raw === null || raw === "")
+        continue;
+      const row = body.createDiv({ cls: "ffc-preview-row" });
+      row.createEl("span", { text: label, cls: "ffc-preview-label" });
+      const valueEl = row.createEl("span", { cls: "ffc-preview-value" });
+      if (Array.isArray(raw)) {
+        raw.forEach((item, i) => {
+          if (i > 0)
+            valueEl.appendText(", ");
+          renderValue(valueEl, item);
+        });
+      } else {
+        renderValue(valueEl, raw);
+      }
+      hasRows = true;
+    }
+    if (!hasRows) {
+      body.remove();
+      (_g = popup.querySelector(".ffc-preview-divider")) == null ? void 0 : _g.remove();
+    }
+    document.body.appendChild(popup);
+    this.popup = popup;
+    this._currentFile = file;
+    popup.addEventListener("mouseenter", () => {
+      if (this.hideTimer)
+        clearTimeout(this.hideTimer);
+    });
+    popup.addEventListener("mouseleave", () => {
+      this.hideTimer = setTimeout(() => this.hide(), 200);
+    });
+    popup.addEventListener("click", (e) => {
+      if (e.target.closest(".ffc-preview-wikilink"))
+        return;
+      const fileToOpen = this._currentFile;
+      this.hide();
+      if (fileToOpen) {
+        const newLeaf = e.metaKey || e.ctrlKey ? "tab" : false;
+        this.plugin.app.workspace.openLinkText(fileToOpen.basename, "", newLeaf);
+      }
+    });
+    const margin = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const positionPopup = () => {
+      if (!this.popup)
+        return;
+      const pw = popup.offsetWidth || 280;
+      const ph = popup.offsetHeight || 120;
+      let left, top;
+      const r = triggerEl ? triggerEl.getBoundingClientRect() : null;
+      if (r && (r.width > 0 || r.height > 0)) {
+        left = r.left;
+        top = r.bottom + 6;
+        if (top + ph > vh - margin)
+          top = r.top - ph - 6;
+        if (left + pw > vw - margin)
+          left = vw - margin - pw;
+      } else {
+        left = clientX + margin;
+        top = clientY + margin;
+        if (left + pw > vw - margin)
+          left = clientX - pw - margin;
+        if (top + ph > vh - margin)
+          top = clientY - ph - margin;
+      }
+      popup.style.left = `${Math.max(margin, left)}px`;
+      popup.style.top = `${Math.max(margin, top)}px`;
+    };
+    requestAnimationFrame(positionPopup);
+  }
+  async _resolveImageSrc(rawValue, app) {
+    if (!rawValue)
+      return null;
+    const v = rawValue.trim();
+    if (!v)
+      return null;
+    if (/^https?:\/\//i.test(v))
+      return v;
+    const linkPath = v.replace(/^\[\[/, "").replace(/\]\]$/, "");
+    const imageFile = app.metadataCache.getFirstLinkpathDest(linkPath, "");
+    if (imageFile)
+      return app.vault.getResourcePath(imageFile);
+    return null;
+  }
+  _getObjectTypeForFile(file) {
+    var _a, _b;
+    for (const objType of this.plugin.settings.objectTypes) {
+      const hasContent = ((_b = (_a = objType.previewFields) == null ? void 0 : _a.length) != null ? _b : 0) > 0 || objType.showImageInPreview && objType.imageKey;
+      if (!hasContent)
+        continue;
+      const files = this.plugin.getObjectTypeFiles(objType);
+      if (files.some((f) => f.path === file.path))
+        return objType;
+    }
+    return null;
+  }
+  // ── Public API ────────────────────────────────────────────────────────────────
+  hide() {
+    if (this.popup) {
+      this.popup.remove();
+      this.popup = null;
+    }
+    this._currentFile = null;
+  }
+  destroy() {
+    this.hide();
+    if (this.hideTimer)
+      clearTimeout(this.hideTimer);
+    if (this.showTimer)
+      clearTimeout(this.showTimer);
+    document.removeEventListener("mouseover", this._onMouseOver, true);
+    document.removeEventListener("mouseout", this._onMouseOut, true);
+  }
+};
+
+// src/ui/canvas-object-switcher.ts
+var import_obsidian11 = require("obsidian");
+var CanvasObjectSwitcher = class extends import_obsidian11.FuzzySuggestModal {
+  constructor(app, plugin, canvas, dropPos) {
+    super(app);
+    this.plugin = plugin;
+    this.canvas = canvas;
+    this.dropPos = dropPos;
+    this.setPlaceholder("Search objects\u2026");
+    this.setInstructions([
+      { command: "\u2191\u2193", purpose: "navigate" },
+      { command: "\u21B5", purpose: "add to canvas" },
+      { command: "esc", purpose: "dismiss" }
+    ]);
+    const seen = /* @__PURE__ */ new Set();
+    this._items = [];
+    for (const objType of plugin.settings.objectTypes) {
+      for (const file of plugin.getObjectTypeFiles(objType)) {
+        if (seen.has(file.path))
+          continue;
+        seen.add(file.path);
+        this._items.push({ file, objType });
+      }
+    }
+  }
+  getItems() {
+    return this._items;
+  }
+  getItemText({ file, objType }) {
+    var _a, _b;
+    const fm = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+    const title = fm["title"] ? String(fm["title"]) : file.basename;
+    return `${title} ${file.basename} ${objType.name}`;
+  }
+  renderSuggestion({ item: { file, objType } }, el) {
+    var _a, _b;
+    const fm = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+    const title = fm["title"] ? String(fm["title"]) : file.basename;
+    el.createEl("span", { text: title, cls: "suggestion-title" });
+    el.createEl("span", { text: objType.name, cls: "suggestion-note" });
+  }
+  onChooseItem({ file, objType }) {
+    this._createCanvasCard(file, objType);
+  }
+  _createCanvasCard(file, objType) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+    const fm = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+    const title = fm["title"] ? String(fm["title"]) : file.basename;
+    const canvasFields = (_c = objType.canvasFields) != null ? _c : [];
+    let imageEmbed = "";
+    if (objType.showImageInCanvas && objType.imageKey) {
+      const rawImg = fm[objType.imageKey];
+      if (rawImg) {
+        const v = String(rawImg).trim();
+        if (/^https?:\/\//i.test(v)) {
+          imageEmbed = `![](${v})
+`;
+        } else {
+          const inner = v.replace(/^\[\[/, "").replace(/\]\]$/, "");
+          imageEmbed = `![[${inner}]]
+`;
+        }
+      }
+    }
+    let text = `${imageEmbed}**${title}**`;
+    for (const pf of canvasFields) {
+      const key = typeof pf === "string" ? pf : (_d = pf.key) != null ? _d : "";
+      const label = typeof pf === "string" ? pf : pf.label || pf.key || key;
+      if (!key)
+        continue;
+      const raw = fm[key];
+      if (raw === void 0 || raw === null || raw === "")
+        continue;
+      const displayVal = Array.isArray(raw) ? raw.map(String).join(", ") : String(raw);
+      text += `
+${label}: ${displayVal}`;
+    }
+    text += `
+
+[[${file.basename}]]`;
+    const pos = (_e = this.dropPos) != null ? _e : this._getViewportCenter();
+    const imageExtra = imageEmbed ? 200 : 0;
+    const size = { width: 300, height: Math.max(160, 60 + canvasFields.length * 28 + imageExtra) };
+    try {
+      const node = this.canvas.createTextNode({
+        pos: { x: pos.x - size.width / 2, y: pos.y - size.height / 2 },
+        size,
+        text,
+        focus: false,
+        save: true
+      });
+      (_g = (_f = this.canvas).deselectAll) == null ? void 0 : _g.call(_f);
+      if (node)
+        (_i = (_h = this.canvas).selectOnly) == null ? void 0 : _i.call(_h, node);
+      new import_obsidian11.Notice(`Added "${title}" to canvas`);
+    } catch (err) {
+      new import_obsidian11.Notice(`Could not add card to canvas: ${err.message}`);
+    }
+  }
+  _getViewportCenter() {
+    var _a, _b, _c, _d, _e;
+    try {
+      const c = this.canvas;
+      if (typeof c.getViewportBBox === "function") {
+        const bb = c.getViewportBBox();
+        return { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 };
+      }
+      const el = (_b = (_a = c.wrapperEl) != null ? _a : c.canvasEl) != null ? _b : c.containerEl;
+      const rect = el == null ? void 0 : el.getBoundingClientRect();
+      if (!rect)
+        return { x: 0, y: 0 };
+      const zoom = (_c = c.zoom) != null ? _c : 1;
+      return {
+        x: (rect.width / 2 - ((_d = c.x) != null ? _d : 0)) / zoom,
+        y: (rect.height / 2 - ((_e = c.y) != null ? _e : 0)) / zoom
+      };
+    } catch (e) {
+      return { x: 0, y: 0 };
+    }
+  }
+};
+
+// src/views/filtered-files-widget.ts
+var import_obsidian13 = require("obsidian");
+
+// src/views/ffw-section-edit-modal.ts
+var import_obsidian12 = require("obsidian");
+var FfwSectionEditModal = class extends import_obsidian12.Modal {
   constructor(app, section, onSave) {
     super(app);
-    this.filtersContainer        = null;
+    this.filtersContainer = null;
     this.frontmatterKeyContainer = null;
-    this.isNew    = section === null;
-    this.working  = section
-      ? JSON.parse(JSON.stringify(section))
-      : { id: ffwNewSectionId(), title: '', filters: [ffwDefaultFilter('tag')], sort: ffwDefaultSort(), collapsed: false, maxResults: 0 };
+    this.isNew = section === null;
+    this.working = section ? JSON.parse(JSON.stringify(section)) : { id: ffwNewSectionId(), title: "", filters: [ffwDefaultFilter("tag")], sort: ffwDefaultSort(), collapsed: false, maxResults: 0 };
     this.onSave = onSave;
   }
-
   onOpen() {
     const { contentEl, titleEl } = this;
-    contentEl.addClass('ffw-modal');
-    titleEl.setText(this.isNew ? 'Add filter section' : 'Edit filter section');
-
-    new obsidian.Setting(contentEl)
-      .setName('Title')
-      .setDesc('Shown as the section header in the widget.')
-      .addText((text) => text
-        .setPlaceholder('Active projects')
-        .setValue(this.working.title)
-        .onChange((v) => { this.working.title = v; })
-      );
-
-    contentEl.createEl('h3', { text: 'Filters' });
-    contentEl.createEl('p', { cls: 'setting-item-description', text: 'All filters must match. Add as many rows as you need.' });
-
-    this.filtersContainer = contentEl.createDiv({ cls: 'ffw-filter-rows' });
+    contentEl.addClass("ffw-modal");
+    titleEl.setText(this.isNew ? "Add filter section" : "Edit filter section");
+    new import_obsidian12.Setting(contentEl).setName("Title").setDesc("Shown as the section header in the widget.").addText(
+      (text) => text.setPlaceholder("Active projects").setValue(this.working.title).onChange((v) => {
+        this.working.title = v;
+      })
+    );
+    contentEl.createEl("h3", { text: "Filters" });
+    contentEl.createEl("p", { cls: "setting-item-description", text: "All filters must match. Add as many rows as you need." });
+    this.filtersContainer = contentEl.createDiv({ cls: "ffw-filter-rows" });
     this.renderFilterRows();
-
-    // Add-filter buttons
-    const addRow = contentEl.createDiv({ cls: 'ffw-add-filter-row' });
-    for (const type of ['tag', 'frontmatter', 'path', 'name']) {
-      new obsidian.ButtonComponent(addRow)
-        .setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`)
-        .onClick(() => {
-          this.working.filters.push(ffwDefaultFilter(type));
-          this.renderFilterRows();
-        });
-    }
-
-    contentEl.createEl('h3', { text: 'Sort' });
-
-    new obsidian.Setting(contentEl)
-      .setName('Sort by')
-      .addDropdown((dd) => {
-        for (const opt of FFW_SORT_OPTIONS) dd.addOption(opt.value, opt.label);
-        dd.setValue(this.working.sort.field)
-          .onChange((v) => {
-            this.working.sort.field = v;
-            this.updateFrontmatterKeyVisibility();
-          });
+    const addRow = contentEl.createDiv({ cls: "ffw-add-filter-row" });
+    for (const type of ["tag", "frontmatter", "path", "name"]) {
+      new import_obsidian12.ButtonComponent(addRow).setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`).onClick(() => {
+        this.working.filters.push(ffwDefaultFilter(type));
+        this.renderFilterRows();
       });
-
+    }
+    contentEl.createEl("h3", { text: "Sort" });
+    new import_obsidian12.Setting(contentEl).setName("Sort by").addDropdown((dd) => {
+      for (const opt of FFW_SORT_OPTIONS)
+        dd.addOption(opt.value, opt.label);
+      dd.setValue(this.working.sort.field).onChange((v) => {
+        this.working.sort.field = v;
+        this.updateFrontmatterKeyVisibility();
+      });
+    });
     this.frontmatterKeyContainer = contentEl.createDiv();
-    new obsidian.Setting(this.frontmatterKeyContainer)
-      .setName('Frontmatter sort key')
-      .setDesc('Required when sorting by a frontmatter field.')
-      .addText((text) => text
-        .setPlaceholder('Due')
-        .setValue(this.working.sort.frontmatterKey ?? '')
-        .onChange((v) => { this.working.sort.frontmatterKey = v.trim() || undefined; })
-      );
+    new import_obsidian12.Setting(this.frontmatterKeyContainer).setName("Frontmatter sort key").setDesc("Required when sorting by a frontmatter field.").addText(
+      (text) => {
+        var _a;
+        return text.setPlaceholder("Due").setValue((_a = this.working.sort.frontmatterKey) != null ? _a : "").onChange((v) => {
+          this.working.sort.frontmatterKey = v.trim() || void 0;
+        });
+      }
+    );
     this.updateFrontmatterKeyVisibility();
-
-    new obsidian.Setting(contentEl)
-      .setName('Result limit')
-      .setDesc('Maximum number of files to show. 0 means unlimited.')
-      .addText((text) => text
-        .setPlaceholder('0')
-        .setValue(String(this.working.maxResults))
-        .onChange((v) => {
-          const n = parseInt(v, 10);
-          this.working.maxResults = Number.isFinite(n) && n > 0 ? n : 0;
-        })
-      );
-
-    const btnRow = contentEl.createDiv({ cls: 'modal-button-container' });
-    new obsidian.ButtonComponent(btnRow).setButtonText('Cancel').onClick(() => this.close());
-    new obsidian.ButtonComponent(btnRow)
-      .setButtonText(this.isNew ? 'Add section' : 'Save')
-      .setCta()
-      .onClick(() => this.handleSave());
+    new import_obsidian12.Setting(contentEl).setName("Result limit").setDesc("Maximum number of files to show. 0 means unlimited.").addText(
+      (text) => text.setPlaceholder("0").setValue(String(this.working.maxResults)).onChange((v) => {
+        const n = parseInt(v, 10);
+        this.working.maxResults = Number.isFinite(n) && n > 0 ? n : 0;
+      })
+    );
+    const btnRow = contentEl.createDiv({ cls: "modal-button-container" });
+    new import_obsidian12.ButtonComponent(btnRow).setButtonText("Cancel").onClick(() => this.close());
+    new import_obsidian12.ButtonComponent(btnRow).setButtonText(this.isNew ? "Add section" : "Save").setCta().onClick(() => this.handleSave());
   }
-
-  onClose() { this.contentEl.empty(); }
-
+  onClose() {
+    this.contentEl.empty();
+  }
   updateFrontmatterKeyVisibility() {
-    if (!this.frontmatterKeyContainer) return;
-    const show = this.working.sort.field === 'frontmatter-asc' || this.working.sort.field === 'frontmatter-desc';
-    this.frontmatterKeyContainer.style.display = show ? '' : 'none';
+    if (!this.frontmatterKeyContainer)
+      return;
+    const show = this.working.sort.field === "frontmatter-asc" || this.working.sort.field === "frontmatter-desc";
+    this.frontmatterKeyContainer.style.display = show ? "" : "none";
   }
-
   renderFilterRows() {
-    if (!this.filtersContainer) return;
+    if (!this.filtersContainer)
+      return;
     this.filtersContainer.empty();
     if (this.working.filters.length === 0) {
-      this.filtersContainer.createEl('p', { cls: 'setting-item-description ffw-empty', text: 'No filters yet — add one below.' });
+      this.filtersContainer.createEl("p", { cls: "setting-item-description ffw-empty", text: "No filters yet \u2014 add one below." });
       return;
     }
     this.working.filters.forEach((filter, idx) => {
-      const row = this.filtersContainer.createDiv({ cls: 'ffw-filter-row' });
-
-      const typeSelect = row.createEl('select', { cls: 'dropdown ffw-type-select' });
+      const row = this.filtersContainer.createDiv({ cls: "ffw-filter-row" });
+      const typeSelect = row.createEl("select", { cls: "dropdown ffw-type-select" });
       for (const [val, label] of Object.entries(FFW_FILTER_TYPE_LABELS)) {
-        const opt = typeSelect.createEl('option', { value: val, text: label });
-        if (val === filter.type) opt.selected = true;
+        const opt = typeSelect.createEl("option", { value: val, text: label });
+        if (val === filter.type)
+          opt.selected = true;
       }
-      typeSelect.addEventListener('change', () => {
+      typeSelect.addEventListener("change", () => {
         if (typeSelect.value !== filter.type) {
           this.working.filters[idx] = ffwDefaultFilter(typeSelect.value);
           this.renderFilterRows();
         }
       });
-
-      const inputsEl = row.createDiv({ cls: 'ffw-filter-inputs' });
+      const inputsEl = row.createDiv({ cls: "ffw-filter-inputs" });
       this.renderFilterInputs(inputsEl, filter, idx);
-
-      const removeBtn = row.createEl('button', { text: '✕', cls: 'ffw-filter-remove' });
-      removeBtn.setAttribute('aria-label', 'Remove filter');
-      removeBtn.addEventListener('click', () => {
+      const removeBtn = row.createEl("button", { text: "\u2715", cls: "ffw-filter-remove" });
+      removeBtn.setAttribute("aria-label", "Remove filter");
+      removeBtn.addEventListener("click", () => {
         this.working.filters.splice(idx, 1);
         this.renderFilterRows();
       });
     });
   }
-
   renderFilterInputs(el, filter, idx) {
     switch (filter.type) {
-      case 'tag':         this.renderTagInputs(el, filter, idx);         break;
-      case 'frontmatter': this.renderFrontmatterInputs(el, filter, idx); break;
-      case 'path':        this.renderPathInputs(el, filter, idx);        break;
-      case 'name':        this.renderNameInputs(el, filter, idx);        break;
+      case "tag":
+        this.renderTagInputs(el, filter, idx);
+        break;
+      case "frontmatter":
+        this.renderFrontmatterInputs(el, filter, idx);
+        break;
+      case "path":
+        this.renderPathInputs(el, filter, idx);
+        break;
+      case "name":
+        this.renderNameInputs(el, filter, idx);
+        break;
     }
   }
-
   renderTagInputs(el, filter, idx) {
-    const modeSelect = el.createEl('select', { cls: 'dropdown' });
-    const inclOpt = modeSelect.createEl('option', { value: 'include', text: 'Has tag' });
-    const exclOpt = modeSelect.createEl('option', { value: 'exclude', text: 'Does not have tag' });
+    const modeSelect = el.createEl("select", { cls: "dropdown" });
+    const inclOpt = modeSelect.createEl("option", { value: "include", text: "Has tag" });
+    const exclOpt = modeSelect.createEl("option", { value: "exclude", text: "Does not have tag" });
     (filter.include ? inclOpt : exclOpt).selected = true;
-    modeSelect.addEventListener('change', () => {
-      this.working.filters[idx].include = modeSelect.value === 'include';
+    modeSelect.addEventListener("change", () => {
+      this.working.filters[idx].include = modeSelect.value === "include";
     });
-    const tagInput = el.createEl('input', { type: 'text', placeholder: 'e.g. project', value: filter.tag, cls: 'ffw-text-input' });
-    tagInput.addEventListener('input', () => { this.working.filters[idx].tag = tagInput.value; });
+    const tagInput = el.createEl("input", { type: "text", placeholder: "e.g. project", value: filter.tag, cls: "ffw-text-input" });
+    tagInput.addEventListener("input", () => {
+      this.working.filters[idx].tag = tagInput.value;
+    });
   }
-
   renderFrontmatterInputs(el, filter, idx) {
-    const keyInput = el.createEl('input', { type: 'text', placeholder: 'key', value: filter.key, cls: 'ffw-text-input' });
-    keyInput.addEventListener('input', () => { this.working.filters[idx].key = keyInput.value; });
-
-    const compSelect = el.createEl('select', { cls: 'dropdown' });
-    for (const { v, label } of [{ v: 'equals', label: '=' }, { v: 'not-equals', label: '≠' }, { v: 'contains', label: 'contains' }, { v: 'exists', label: 'exists' }]) {
-      const opt = compSelect.createEl('option', { value: v, text: label });
-      if (v === filter.comparison) opt.selected = true;
+    const keyInput = el.createEl("input", { type: "text", placeholder: "key", value: filter.key, cls: "ffw-text-input" });
+    keyInput.addEventListener("input", () => {
+      this.working.filters[idx].key = keyInput.value;
+    });
+    const compSelect = el.createEl("select", { cls: "dropdown" });
+    for (const { v, label } of [{ v: "equals", label: "=" }, { v: "not-equals", label: "\u2260" }, { v: "contains", label: "contains" }, { v: "exists", label: "exists" }]) {
+      const opt = compSelect.createEl("option", { value: v, text: label });
+      if (v === filter.comparison)
+        opt.selected = true;
     }
-
-    const valInput = el.createEl('input', { type: 'text', placeholder: 'value', value: filter.value, cls: 'ffw-text-input' });
-    valInput.disabled = filter.comparison === 'exists';
-    valInput.addEventListener('input', () => { this.working.filters[idx].value = valInput.value; });
-    compSelect.addEventListener('change', () => {
+    const valInput = el.createEl("input", { type: "text", placeholder: "value", value: filter.value, cls: "ffw-text-input" });
+    valInput.disabled = filter.comparison === "exists";
+    valInput.addEventListener("input", () => {
+      this.working.filters[idx].value = valInput.value;
+    });
+    compSelect.addEventListener("change", () => {
       const comp = compSelect.value;
       this.working.filters[idx].comparison = comp;
-      valInput.disabled = comp === 'exists';
+      valInput.disabled = comp === "exists";
     });
   }
-
   renderPathInputs(el, filter, idx) {
-    const negateSelect = el.createEl('select', { cls: 'dropdown' });
-    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
-    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected = filter.negate;
-    negateSelect.addEventListener('change', () => {
-      this.working.filters[idx].negate = negateSelect.value === 'is-not';
+    const negateSelect = el.createEl("select", { cls: "dropdown" });
+    negateSelect.createEl("option", { value: "is", text: "is" }).selected = !filter.negate;
+    negateSelect.createEl("option", { value: "is-not", text: "is not" }).selected = filter.negate;
+    negateSelect.addEventListener("change", () => {
+      this.working.filters[idx].negate = negateSelect.value === "is-not";
     });
-
-    const modeSelect = el.createEl('select', { cls: 'dropdown' });
-    for (const { v, label } of [{ v: 'starts-with', label: 'starts with' }, { v: 'contains', label: 'contains' }, { v: 'equals', label: 'equals' }, { v: 'ends-with', label: 'ends with' }]) {
-      const opt = modeSelect.createEl('option', { value: v, text: label });
-      if (v === filter.matchMode) opt.selected = true;
+    const modeSelect = el.createEl("select", { cls: "dropdown" });
+    for (const { v, label } of [{ v: "starts-with", label: "starts with" }, { v: "contains", label: "contains" }, { v: "equals", label: "equals" }, { v: "ends-with", label: "ends with" }]) {
+      const opt = modeSelect.createEl("option", { value: v, text: label });
+      if (v === filter.matchMode)
+        opt.selected = true;
     }
-    modeSelect.addEventListener('change', () => { this.working.filters[idx].matchMode = modeSelect.value; });
-
-    const patInput = el.createEl('input', { type: 'text', placeholder: 'e.g. Work/', value: filter.pattern, cls: 'ffw-text-input' });
-    patInput.addEventListener('input', () => { this.working.filters[idx].pattern = patInput.value; });
+    modeSelect.addEventListener("change", () => {
+      this.working.filters[idx].matchMode = modeSelect.value;
+    });
+    const patInput = el.createEl("input", { type: "text", placeholder: "e.g. Work/", value: filter.pattern, cls: "ffw-text-input" });
+    patInput.addEventListener("input", () => {
+      this.working.filters[idx].pattern = patInput.value;
+    });
   }
-
   renderNameInputs(el, filter, idx) {
-    const negateSelect = el.createEl('select', { cls: 'dropdown' });
-    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
-    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected = filter.negate;
-    negateSelect.addEventListener('change', () => {
-      this.working.filters[idx].negate = negateSelect.value === 'is-not';
+    const negateSelect = el.createEl("select", { cls: "dropdown" });
+    negateSelect.createEl("option", { value: "is", text: "is" }).selected = !filter.negate;
+    negateSelect.createEl("option", { value: "is-not", text: "is not" }).selected = filter.negate;
+    negateSelect.addEventListener("change", () => {
+      this.working.filters[idx].negate = negateSelect.value === "is-not";
     });
-
-    const modeSelect = el.createEl('select', { cls: 'dropdown' });
-    for (const { v, label } of [{ v: 'contains', label: 'contains' }, { v: 'starts-with', label: 'starts with' }, { v: 'ends-with', label: 'ends with' }, { v: 'regex', label: 'regex' }]) {
-      const opt = modeSelect.createEl('option', { value: v, text: label });
-      if (v === filter.matchMode) opt.selected = true;
+    const modeSelect = el.createEl("select", { cls: "dropdown" });
+    for (const { v, label } of [{ v: "contains", label: "contains" }, { v: "starts-with", label: "starts with" }, { v: "ends-with", label: "ends with" }, { v: "regex", label: "regex" }]) {
+      const opt = modeSelect.createEl("option", { value: v, text: label });
+      if (v === filter.matchMode)
+        opt.selected = true;
     }
-    modeSelect.addEventListener('change', () => { this.working.filters[idx].matchMode = modeSelect.value; });
-
-    const patInput = el.createEl('input', { type: 'text', placeholder: 'pattern', value: filter.pattern, cls: 'ffw-text-input' });
-    patInput.addEventListener('input', () => { this.working.filters[idx].pattern = patInput.value; });
-
-    const caseLbl   = el.createEl('label', { cls: 'ffw-checkbox' });
-    const caseCheck = caseLbl.createEl('input', { type: 'checkbox' });
+    modeSelect.addEventListener("change", () => {
+      this.working.filters[idx].matchMode = modeSelect.value;
+    });
+    const patInput = el.createEl("input", { type: "text", placeholder: "pattern", value: filter.pattern, cls: "ffw-text-input" });
+    patInput.addEventListener("input", () => {
+      this.working.filters[idx].pattern = patInput.value;
+    });
+    const caseLbl = el.createEl("label", { cls: "ffw-checkbox" });
+    const caseCheck = caseLbl.createEl("input", { type: "checkbox" });
     caseCheck.checked = filter.caseSensitive;
-    caseLbl.appendChild(document.createTextNode(' case sensitive'));
-    caseCheck.addEventListener('change', () => { this.working.filters[idx].caseSensitive = caseCheck.checked; });
+    caseLbl.appendChild(document.createTextNode(" case sensitive"));
+    caseCheck.addEventListener("change", () => {
+      this.working.filters[idx].caseSensitive = caseCheck.checked;
+    });
   }
-
   handleSave() {
     const title = this.working.title.trim();
-    if (!title) { new obsidian.Notice('Please enter a title for the section.'); return; }
-    if (this.working.filters.length === 0) { new obsidian.Notice('Add at least one filter to the section.'); return; }
-    if ((this.working.sort.field === 'frontmatter-asc' || this.working.sort.field === 'frontmatter-desc') && !this.working.sort.frontmatterKey) {
-      new obsidian.Notice('Please specify a frontmatter key to sort by.'); return;
+    if (!title) {
+      new import_obsidian12.Notice("Please enter a title for the section.");
+      return;
+    }
+    if (this.working.filters.length === 0) {
+      new import_obsidian12.Notice("Add at least one filter to the section.");
+      return;
+    }
+    if ((this.working.sort.field === "frontmatter-asc" || this.working.sort.field === "frontmatter-desc") && !this.working.sort.frontmatterKey) {
+      new import_obsidian12.Notice("Please specify a frontmatter key to sort by.");
+      return;
     }
     this.working.title = title;
     this.onSave(this.working);
     this.close();
   }
-}
+};
 
-// ── Filtered Files Widget view ────────────────────────────────────────────────
-
-class FilteredFilesWidgetView extends obsidian.ItemView {
+// src/views/filtered-files-widget.ts
+var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
-    this.query        = '';
-    this.rootEl       = null;
-    this.sectionsEl   = null;
+    this.query = "";
+    this.rootEl = null;
+    this.sectionsEl = null;
     this.dragSourceId = null;
-    this.refresh      = obsidian.debounce(() => this.render(), 80, true);
-    this.plugin       = plugin;
+    this.plugin = plugin;
+    this.refresh = (0, import_obsidian13.debounce)(() => this.render(), 80, true);
   }
-
-  getViewType()    { return FFW_VIEW_TYPE; }
-  getDisplayText() { return 'Filtered files'; }
-  getIcon()        { return 'file-sliders'; }
-
+  getViewType() {
+    return FFW_VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Filtered files";
+  }
+  getIcon() {
+    return "file-sliders";
+  }
   async onOpen() {
     this.rootEl = this.containerEl.children[1];
     this.rootEl.empty();
-    this.rootEl.addClass('ffw-root');
-    this.registerEvent(this.app.metadataCache.on('resolved', () => this.refresh()));
-    this.registerEvent(this.app.metadataCache.on('changed',  () => this.refresh()));
-    this.registerEvent(this.app.vault.on('create', () => this.refresh()));
-    this.registerEvent(this.app.vault.on('delete', () => this.refresh()));
-    this.registerEvent(this.app.vault.on('rename', () => this.refresh()));
-    this.registerEvent(this.app.workspace.on('iconic:icon-changed', () => this.refresh()));
+    this.rootEl.addClass("ffw-root");
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.refresh()));
+    this.registerEvent(this.app.metadataCache.on("changed", () => this.refresh()));
+    this.registerEvent(this.app.vault.on("create", () => this.refresh()));
+    this.registerEvent(this.app.vault.on("delete", () => this.refresh()));
+    this.registerEvent(this.app.vault.on("rename", () => this.refresh()));
+    this.registerEvent(this.app.workspace.on("iconic:icon-changed", () => this.refresh()));
     this.render();
   }
-
-  async onClose() { this.containerEl.empty(); }
-
+  async onClose() {
+    this.containerEl.empty();
+  }
   render() {
-    if (!this.rootEl) return;
+    if (!this.rootEl)
+      return;
     this.rootEl.empty();
     this.renderHeader(this.rootEl);
-    this.sectionsEl = this.rootEl.createDiv({ cls: 'ffw-sections' });
+    this.sectionsEl = this.rootEl.createDiv({ cls: "ffw-sections" });
     this.renderSections();
   }
-
   renderHeader(el) {
-    const row    = el.createDiv({ cls: 'ffw-header' }).createDiv({ cls: 'ffw-search-row' });
-    const search = new obsidian.SearchComponent(row);
-    search.setPlaceholder('Filter...');
+    const row = el.createDiv({ cls: "ffw-header" }).createDiv({ cls: "ffw-search-row" });
+    const search = new import_obsidian13.SearchComponent(row);
+    search.setPlaceholder("Filter...");
     search.setValue(this.query);
-    search.onChange((v) => { this.query = v; this.renderSections(); });
-
-    const addBtn = row.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Add filter section' } });
-    obsidian.setIcon(addBtn, 'plus');
-    addBtn.addEventListener('click', () => this.openAddModal());
+    search.onChange((v) => {
+      this.query = v;
+      this.renderSections();
+    });
+    const addBtn = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Add filter section" } });
+    (0, import_obsidian13.setIcon)(addBtn, "plus");
+    addBtn.addEventListener("click", () => this.openAddModal());
   }
-
   renderSections() {
-    if (!this.sectionsEl) return;
+    if (!this.sectionsEl)
+      return;
     this.sectionsEl.empty();
     const sections = this.plugin.settings.ffwSections;
     if (sections.length === 0) {
-      const empty = this.sectionsEl.createDiv({ cls: 'ffw-empty-state' });
-      empty.createEl('p', { text: 'No filter sections yet.' });
-      empty.createEl('p', { cls: 'setting-item-description', text: 'Use the + button above to create your first filter section.' });
+      const empty = this.sectionsEl.createDiv({ cls: "ffw-empty-state" });
+      empty.createEl("p", { text: "No filter sections yet." });
+      empty.createEl("p", { cls: "setting-item-description", text: "Use the + button above to create your first filter section." });
       return;
     }
     sections.forEach((section) => this.renderSection(section));
   }
-
   renderSection(section) {
-    if (!this.sectionsEl) return;
-
-    const sectionEl = this.sectionsEl.createDiv({ cls: 'ffw-section' });
-    sectionEl.dataset.sectionId = section.id;
-    if (section.collapsed) sectionEl.addClass('is-collapsed');
-    sectionEl.setAttr('draggable', 'true');
-    sectionEl.addEventListener('dragstart', (e) => this.handleDragStart(e, section.id));
-    sectionEl.addEventListener('dragover',  (e) => this.handleDragOver(e, sectionEl));
-    sectionEl.addEventListener('dragleave', ()  => sectionEl.removeClass('is-drag-over'));
-    sectionEl.addEventListener('drop',      (e) => this.handleDrop(e, section.id, sectionEl));
-    sectionEl.addEventListener('dragend',   ()  => this.clearDragState());
-
-    const header = sectionEl.createDiv({ cls: 'ffw-section-header' });
-
-    const dragHandle = header.createSpan({ cls: 'ffw-drag-handle' });
-    obsidian.setIcon(dragHandle, 'grip-vertical');
-    dragHandle.setAttr('aria-label', 'Drag to reorder');
-
-    const collapseToggle = header.createSpan({ cls: 'ffw-collapse-toggle' });
-    obsidian.setIcon(collapseToggle, section.collapsed ? 'chevron-right' : 'chevron-down');
-    collapseToggle.setAttr('aria-label', section.collapsed ? 'Expand section' : 'Collapse section');
-    collapseToggle.addEventListener('click', (e) => { e.stopPropagation(); this.toggleCollapse(section); });
-
-    const titleWrap = header.createDiv({ cls: 'ffw-section-title-wrap' });
-    titleWrap.createEl('div', { cls: 'ffw-section-title', text: section.title });
-    titleWrap.createEl('div', {
-      cls:  'ffw-section-meta',
-      text: `${section.filters.length} filter${section.filters.length === 1 ? '' : 's'} · ${ffwSortLabel(section.sort)}`,
+    if (!this.sectionsEl)
+      return;
+    const sectionEl = this.sectionsEl.createDiv({ cls: "ffw-section" });
+    sectionEl.dataset["sectionId"] = section.id;
+    if (section.collapsed)
+      sectionEl.addClass("is-collapsed");
+    sectionEl.setAttr("draggable", "true");
+    sectionEl.addEventListener("dragstart", (e) => this.handleDragStart(e, section.id));
+    sectionEl.addEventListener("dragover", (e) => this.handleDragOver(e, sectionEl));
+    sectionEl.addEventListener("dragleave", () => sectionEl.removeClass("is-drag-over"));
+    sectionEl.addEventListener("drop", (e) => this.handleDrop(e, section.id, sectionEl));
+    sectionEl.addEventListener("dragend", () => this.clearDragState());
+    const header = sectionEl.createDiv({ cls: "ffw-section-header" });
+    const dragHandle = header.createSpan({ cls: "ffw-drag-handle" });
+    (0, import_obsidian13.setIcon)(dragHandle, "grip-vertical");
+    dragHandle.setAttr("aria-label", "Drag to reorder");
+    const collapseToggle = header.createSpan({ cls: "ffw-collapse-toggle" });
+    (0, import_obsidian13.setIcon)(collapseToggle, section.collapsed ? "chevron-right" : "chevron-down");
+    collapseToggle.setAttr("aria-label", section.collapsed ? "Expand section" : "Collapse section");
+    collapseToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleCollapse(section);
     });
-    titleWrap.addEventListener('click', () => this.toggleCollapse(section));
-
-    const controls = header.createDiv({ cls: 'ffw-section-controls' });
-    this.addIconButton(controls, 'more-vertical', 'More actions', (e) => this.openSectionMenu(section, e));
-
-    const body = sectionEl.createDiv({ cls: 'ffw-section-body' });
+    const titleWrap = header.createDiv({ cls: "ffw-section-title-wrap" });
+    titleWrap.createEl("div", { cls: "ffw-section-title", text: section.title });
+    titleWrap.createEl("div", {
+      cls: "ffw-section-meta",
+      text: `${section.filters.length} filter${section.filters.length === 1 ? "" : "s"} \xB7 ${ffwSortLabel(section.sort)}`
+    });
+    titleWrap.addEventListener("click", () => this.toggleCollapse(section));
+    const controls = header.createDiv({ cls: "ffw-section-controls" });
+    this.addIconButton(controls, "more-vertical", "More actions", (e) => this.openSectionMenu(section, e));
+    const body = sectionEl.createDiv({ cls: "ffw-section-body" });
     if (!section.collapsed) {
       try {
-        const files    = ffwGetSectionFiles(this.app, section);
-        const filtered = this.query
-          ? files.filter((f) => ffwFuzzyMatch(this.query, f.basename) || ffwFuzzyMatch(this.query, f.path))
-          : files;
-
+        const files = ffwGetSectionFiles(this.app, section);
+        const filtered = this.query ? files.filter((f) => ffwFuzzyMatch(this.query, f.basename) || ffwFuzzyMatch(this.query, f.path)) : files;
         if (filtered.length === 0) {
-          body.createDiv({ cls: 'ffw-no-results', text: this.query ? 'No files match the search.' : 'No files match the filters.' });
+          body.createDiv({ cls: "ffw-no-results", text: this.query ? "No files match the search." : "No files match the filters." });
           return;
         }
-
-        const list = body.createDiv({ cls: 'ffw-file-list' });
+        const list = body.createDiv({ cls: "ffw-file-list" });
         filtered.forEach((f) => this.renderFileRow(list, f));
-
         if (files.length > filtered.length) {
-          body.createDiv({ cls: 'ffw-truncated', text: `${files.length - filtered.length} hidden by search` });
+          body.createDiv({ cls: "ffw-truncated", text: `${files.length - filtered.length} hidden by search` });
         }
       } catch (err) {
-        body.createDiv({ cls: 'ffw-error', text: `Error rendering section: ${err.message}` });
+        body.createDiv({ cls: "ffw-error", text: `Error rendering section: ${err.message}` });
       }
     }
   }
-
   renderFileRow(el, file) {
-    const row    = el.createDiv({ cls: 'ffw-file-row' });
-    const iconEl = row.createSpan({ cls: 'ffw-file-icon' });
-
+    var _a, _b;
+    const row = el.createDiv({ cls: "ffw-file-row" });
+    const iconEl = row.createSpan({ cls: "ffw-file-icon" });
     const iconicIcon = ffwGetIconicIcon(this.app, file);
-    if (iconicIcon?.icon) {
-      ffwSetIconEl(iconEl, iconicIcon.icon, iconicIcon.color ?? null);
+    if (iconicIcon == null ? void 0 : iconicIcon.icon) {
+      ffwSetIconEl(iconEl, iconicIcon.icon, iconicIcon.color);
     } else {
-      obsidian.setIcon(iconEl, 'file-text');
+      (0, import_obsidian13.setIcon)(iconEl, "file-text");
     }
-
-    const labelEl    = row.createDiv({ cls: 'ffw-file-label' });
-    const key        = this.plugin.settings.ffwDisplayNameKey;
-    const fmCache    = key ? this.app.metadataCache.getFileCache(file)?.frontmatter : null;
-    const displayName = (key && fmCache?.[key] != null) ? String(fmCache[key]) : file.basename;
-    labelEl.createDiv({ cls: 'ffw-file-name', text: displayName });
-
-    const folder = file.parent?.path && file.parent.path !== '/' ? file.parent.path : '';
-    if (folder) labelEl.createDiv({ cls: 'ffw-file-path', text: folder });
-
-    row.addEventListener('click', (e) => {
-      this.app.workspace.openLinkText(file.path, '', e.ctrlKey || e.metaKey);
+    const labelEl = row.createDiv({ cls: "ffw-file-label" });
+    const key = this.plugin.settings.ffwDisplayNameKey;
+    const fmCache = key ? (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter : null;
+    const displayName = key && (fmCache == null ? void 0 : fmCache[key]) != null ? String(fmCache[key]) : file.basename;
+    labelEl.createDiv({ cls: "ffw-file-name", text: displayName });
+    const folder = ((_b = file.parent) == null ? void 0 : _b.path) && file.parent.path !== "/" ? file.parent.path : "";
+    if (folder)
+      labelEl.createDiv({ cls: "ffw-file-path", text: folder });
+    row.addEventListener("click", (e) => {
+      this.app.workspace.openLinkText(file.path, "", e.ctrlKey || e.metaKey);
     });
-
-    row.addEventListener('contextmenu', (e) => {
+    row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new obsidian.Menu();
-      menu.addItem((item) => item.setTitle('Open').setIcon('file-text')
-        .onClick(() => this.app.workspace.openLinkText(file.path, '', false)));
-      menu.addItem((item) => item.setTitle('Open in new tab').setIcon('file-plus')
-        .onClick(() => this.app.workspace.openLinkText(file.path, '', true)));
-      menu.addItem((item) => item.setTitle('Reveal in file explorer').setIcon('folder')
-        .onClick(() => {
-          const fe   = this.app.internalPlugins?.getPluginById?.('file-explorer');
-          const inst = fe?.instance;
-          if (inst?.revealInFolder) {
-            try { inst.revealInFolder(file); return; } catch {}
+      const menu = new import_obsidian13.Menu();
+      menu.addItem((item) => item.setTitle("Open").setIcon("file-text").onClick(() => this.app.workspace.openLinkText(file.path, "", false)));
+      menu.addItem((item) => item.setTitle("Open in new tab").setIcon("file-plus").onClick(() => this.app.workspace.openLinkText(file.path, "", true)));
+      menu.addItem((item) => item.setTitle("Reveal in file explorer").setIcon("folder").onClick(() => {
+        var _a2, _b2;
+        const fe = (_b2 = (_a2 = this.app.internalPlugins) == null ? void 0 : _a2.getPluginById) == null ? void 0 : _b2.call(_a2, "file-explorer");
+        const inst = fe == null ? void 0 : fe.instance;
+        if (inst == null ? void 0 : inst.revealInFolder) {
+          try {
+            inst.revealInFolder(file);
+            return;
+          } catch (e2) {
           }
-          new obsidian.Notice('Could not reveal file in the file explorer.');
-        }));
+        }
+        new import_obsidian13.Notice("Could not reveal file in the file explorer.");
+      }));
       menu.showAtMouseEvent(e);
     });
   }
-
   addIconButton(el, icon, label, onClick) {
-    const btn = el.createEl('button', { cls: 'clickable-icon' });
-    obsidian.setIcon(btn, icon);
-    btn.setAttr('aria-label', label);
-    btn.addEventListener('click', (e) => { e.stopPropagation(); onClick(e); });
+    const btn = el.createEl("button", { cls: "clickable-icon" });
+    (0, import_obsidian13.setIcon)(btn, icon);
+    btn.setAttr("aria-label", label);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick(e);
+    });
   }
-
   openSectionMenu(section, e) {
-    const menu = new obsidian.Menu();
-    menu.addItem((item) => item.setTitle('Edit').setIcon('pencil').onClick(() => this.openEditModal(section)));
-    menu.addItem((item) => item.setTitle('Duplicate').setIcon('copy').onClick(() => this.duplicateSection(section)));
+    const menu = new import_obsidian13.Menu();
+    menu.addItem((item) => item.setTitle("Edit").setIcon("pencil").onClick(() => this.openEditModal(section)));
+    menu.addItem((item) => item.setTitle("Duplicate").setIcon("copy").onClick(() => this.duplicateSection(section)));
     menu.addSeparator();
-    menu.addItem((item) => item.setTitle('Delete section').setIcon('trash').onClick(() => this.deleteSection(section.id)));
+    menu.addItem((item) => item.setTitle("Delete section").setIcon("trash").onClick(() => this.deleteSection(section.id)));
     menu.showAtMouseEvent(e);
   }
-
   openAddModal() {
     new FfwSectionEditModal(this.app, null, (section) => {
       this.plugin.settings.ffwSections.push(section);
       this.persistAndRender();
     }).open();
   }
-
   openEditModal(section) {
     new FfwSectionEditModal(this.app, section, (updated) => {
       const idx = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
@@ -1556,1056 +2173,137 @@ class FilteredFilesWidgetView extends obsidian.ItemView {
       }
     }).open();
   }
-
   async persistAndRender() {
     await this.plugin.saveSettings();
     this.renderSections();
   }
-
   async toggleCollapse(section) {
     section.collapsed = !section.collapsed;
     await this.plugin.saveSettings();
     this.renderSections();
   }
-
   async duplicateSection(section) {
-    const copy  = JSON.parse(JSON.stringify(section));
-    copy.id     = ffwNewSectionId();
-    copy.title  = `${section.title} (copy)`;
-    const idx   = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
+    const copy = JSON.parse(JSON.stringify(section));
+    copy.id = ffwNewSectionId();
+    copy.title = `${section.title} (copy)`;
+    const idx = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
     this.plugin.settings.ffwSections.splice(idx + 1, 0, copy);
     await this.plugin.saveSettings();
     this.renderSections();
   }
-
   async deleteSection(id) {
     const sections = this.plugin.settings.ffwSections;
-    const idx      = sections.findIndex((s) => s.id === id);
-    if (idx < 0) return;
+    const idx = sections.findIndex((s) => s.id === id);
+    if (idx < 0)
+      return;
     const [removed] = sections.splice(idx, 1);
     await this.plugin.saveSettings();
     this.renderSections();
-    if (removed) new obsidian.Notice(`Removed "${removed.title}"`);
+    if (removed)
+      new import_obsidian13.Notice(`Removed "${removed.title}"`);
   }
-
   // ── Drag-and-drop reorder ─────────────────────────────────────────────────────
-
   handleDragStart(e, id) {
     this.dragSourceId = id;
-    if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', id); }
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", id);
+    }
   }
-
   handleDragOver(e, el) {
-    if (!this.dragSourceId) return;
+    if (!this.dragSourceId)
+      return;
     e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    el.addClass('is-drag-over');
+    if (e.dataTransfer)
+      e.dataTransfer.dropEffect = "move";
+    el.addClass("is-drag-over");
   }
-
   async handleDrop(e, targetId, el) {
     e.preventDefault();
-    el.removeClass('is-drag-over');
+    el.removeClass("is-drag-over");
     const sourceId = this.dragSourceId;
     this.dragSourceId = null;
-    if (!sourceId || sourceId === targetId) return;
-
+    if (!sourceId || sourceId === targetId)
+      return;
     const sections = this.plugin.settings.ffwSections;
-    const fromIdx  = sections.findIndex((s) => s.id === sourceId);
-    const toIdx    = sections.findIndex((s) => s.id === targetId);
-    if (fromIdx < 0 || toIdx < 0) return;
-
+    const fromIdx = sections.findIndex((s) => s.id === sourceId);
+    const toIdx = sections.findIndex((s) => s.id === targetId);
+    if (fromIdx < 0 || toIdx < 0)
+      return;
     const [moved] = sections.splice(fromIdx, 1);
-    if (!moved) return;
+    if (!moved)
+      return;
     const newIdx = sections.findIndex((s) => s.id === targetId);
     sections.splice(newIdx < 0 ? sections.length : newIdx, 0, moved);
     await this.plugin.saveSettings();
     this.renderSections();
   }
-
   clearDragState() {
     this.dragSourceId = null;
-    this.containerEl.querySelectorAll('.ffw-section.is-drag-over')
-      .forEach((el) => el.classList.remove('is-drag-over'));
+    this.containerEl.querySelectorAll(".ffw-section.is-drag-over").forEach((el) => el.classList.remove("is-drag-over"));
   }
-}
-
-// ─── Settings Tab ─────────────────────────────────────────────────────────────
-
-class MyPluginSettingTab extends obsidian.PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.addClass('ffc-settings');
-
-    // ── Filtered File Commands ────────────────────────────────────────────────
-    containerEl.createEl('h2', { text: 'Filtered File Commands' });
-    containerEl.createEl('p', {
-      text: 'Each command opens a fuzzy file picker showing only files whose frontmatter properties match your filters.',
-      cls: 'ffc-settings-desc',
-    });
-
-    for (let i = 0; i < this.plugin.settings.commands.length; i++) {
-      this.renderCommand(containerEl, i);
-    }
-
-    new obsidian.Setting(containerEl).addButton((btn) =>
-      btn.setButtonText('＋ Add New Command').setCta().onClick(async () => {
-        const id = `ffc-command-${Date.now()}`;
-        this.plugin.settings.commands.push({ id, name: 'New Filtered Command', matchMode: 'all', filters: [] });
-        await this.plugin.saveSettings();
-        this.plugin.registerFilterCommand(this.plugin.settings.commands[this.plugin.settings.commands.length - 1]);
-        this.display();
-      })
-    );
-
-    containerEl.createEl('hr', { cls: 'ffc-divider' });
-
-    // ── General ───────────────────────────────────────────────────────────────
-    containerEl.createEl('h2', { text: 'General' });
-    containerEl.createEl('p', {
-      text: 'Define object types to get "Create new …" commands in the palette. Optionally define fields that will be prompted at creation time and written into the new file\'s frontmatter.',
-      cls: 'ffc-settings-desc',
-    });
-
-    new obsidian.Setting(containerEl)
-      .setName('Trigger key')
-      .setDesc('Character that opens the inline object picker while editing (e.g. "@"). Leave blank to disable. Changes take effect immediately.')
-      .addText((text) =>
-        text
-          .setPlaceholder('e.g. @')
-          .setValue(this.plugin.settings.triggerKey || '')
-          .onChange(async (value) => {
-            // Only allow a single character (or empty)
-            const trimmed = value.trim().slice(0, 1);
-            this.plugin.settings.triggerKey = trimmed;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new obsidian.Setting(containerEl)
-      .setName('Templates folder')
-      .setDesc('Path to your templates folder (e.g. "Templates"). Leave blank to auto-detect from the core Templates plugin.')
-      .addText((text) =>
-        text.setPlaceholder('Templates').setValue(this.plugin.settings.templatesFolder || '')
-          .onChange(async (value) => {
-            this.plugin.settings.templatesFolder = value.trim();
-            await this.plugin.saveSettings();
-          })
-      );
-
-    containerEl.createEl('hr', { cls: 'ffc-divider' });
-
-    // ── Object Types ──────────────────────────────────────────────────────────
-    const objTypesHeader = containerEl.createDiv({ cls: 'ffc-section-header' });
-    objTypesHeader.createEl('h2', { text: 'Object Types', cls: 'ffc-section-header-title' });
-    const addObjTypeBtn = objTypesHeader.createEl('button', { cls: 'clickable-icon ffc-btn-add', title: 'Add object type', attr: { 'aria-label': 'Add object type' } });
-    obsidian.setIcon(addObjTypeBtn, 'plus');
-    addObjTypeBtn.onclick = async () => {
-      const id = `ffc-objtype-${Date.now()}`;
-      const takenSlugs = new Set(this.plugin.settings.objectTypes.map((o) => o.commandSlug).filter(Boolean));
-      const baseSlug = nameToCommandSlug('New Object');
-      let newSlug = baseSlug; let slugN = 2;
-      while (takenSlugs.has(newSlug)) newSlug = `${baseSlug}-${slugN++}`;
-      this.plugin.settings.objectTypes.push({ id, commandSlug: newSlug, name: 'New Object', templatePath: '', saveFolder: '', fields: [], matchFilters: [], matchMode: 'all', enableFindCommand: false, showInTriggerMenu: false, previewFields: [] });
-      await this.plugin.saveSettings();
-      this.plugin.registerObjectTypeCommand(this.plugin.settings.objectTypes[this.plugin.settings.objectTypes.length - 1]);
-      this.display();
-    };
-
-    const objTypesList = containerEl.createDiv({ cls: 'setting-group ffc-objtype-list' });
-    if (this.plugin.settings.objectTypes.length === 0) {
-      objTypesList.createEl('p', { text: 'No object types yet. Click + to add one.', cls: 'ffc-hint ffc-objtype-empty' });
-    } else {
-      for (let i = 0; i < this.plugin.settings.objectTypes.length; i++) {
-        this.renderObjectTypeRow(objTypesList, i);
-      }
-    }
-
-    containerEl.createEl('hr', { cls: 'ffc-divider' });
-
-    // ── Filtered Files Widget ─────────────────────────────────────────────────
-    containerEl.createEl('h2', { text: 'Filtered Files Widget' });
-    containerEl.createEl('p', {
-      text: 'A sidebar panel that shows lists of files matching configurable filter rules. Filter sections are managed directly inside the widget — open it and click + to create your first section.',
-      cls: 'ffc-settings-desc',
-    });
-
-    new obsidian.Setting(containerEl)
-      .setName('Open the widget')
-      .setDesc('Reveal the filtered files widget in the left sidebar.')
-      .addButton((btn) => btn.setButtonText('Open widget').setCta().onClick(() => {
-        this.plugin.activateWidgetView();
-      }));
-
-    new obsidian.Setting(containerEl)
-      .setName('Display name frontmatter key')
-      .setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.')
-      .addText((text) => text
-        .setPlaceholder('e.g. title')
-        .setValue(this.plugin.settings.ffwDisplayNameKey)
-        .onChange(async (v) => {
-          this.plugin.settings.ffwDisplayNameKey = v.trim();
-          await this.plugin.saveSettings();
-          this.plugin.refreshWidgetViews();
-        })
-      );
-
-    new obsidian.Setting(containerEl)
-      .setName('Reset all filter sections')
-      .setDesc('Remove every filter section from the widget. This cannot be undone.')
-      .addButton((btn) => btn.setButtonText('Reset').setWarning().onClick(async () => {
-        this.plugin.settings.ffwSections = [];
-        await this.plugin.saveSettings();
-        this.plugin.refreshWidgetViews();
-      }));
-
-  }
-
-  // ── Filtered command block ────────────────────────────────────────────────────
-
-  renderCommand(containerEl, index) {
-    const cmd = this.plugin.settings.commands[index];
-    const block = containerEl.createDiv({ cls: 'ffc-command-block' });
-
-    const header = block.createDiv({ cls: 'ffc-command-header' });
-    header.createEl('span', { text: `Command ${index + 1}`, cls: 'ffc-command-label' });
-    header.createEl('button', { text: '✕ Remove', cls: 'mod-warning' }).onclick = async () => {
-      this.plugin.settings.commands.splice(index, 1);
-      await this.plugin.saveSettings();
-      this.display();
-    };
-
-    new obsidian.Setting(block).setName('Command name').setDesc('Shown in the command palette and hotkey settings.')
-      .addText((text) => text.setPlaceholder('e.g. Show Active Projects').setValue(cmd.name)
-        .onChange(async (value) => {
-          cmd.name = value;
-          await this.plugin.saveSettings();
-          if (this.plugin.commandRefs?.[cmd.id]) this.plugin.commandRefs[cmd.id].name = value;
-        })
-      );
-
-    new obsidian.Setting(block).setName('Filter match mode').setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
-      .addDropdown((dd) => dd.addOption('all', 'Match ALL filters (AND)').addOption('any', 'Match ANY filter (OR)')
-        .setValue(cmd.matchMode)
-        .onChange(async (value) => { cmd.matchMode = value; await this.plugin.saveSettings(); })
-      );
-
-    new obsidian.Setting(block).setName('File types').setDesc('Comma-separated extensions (e.g. md, canvas). Leave blank for markdown only.')
-      .addText((text) => text.setPlaceholder('md, canvas').setValue(cmd.fileTypes || '')
-        .onChange(async (value) => { cmd.fileTypes = value; await this.plugin.saveSettings(); })
-      );
-
-    const filtersSection = block.createDiv({ cls: 'ffc-filters-section' });
-    filtersSection.createEl('p', { text: 'Frontmatter Filters', cls: 'ffc-filters-title' });
-    if (cmd.filters.length === 0) {
-      filtersSection.createEl('p', { text: 'No filters — all files of the specified type(s) will be shown.', cls: 'ffc-hint' });
-    }
-    for (let fi = 0; fi < cmd.filters.length; fi++) this.renderFilter(filtersSection, index, fi);
-    new obsidian.Setting(filtersSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Filter').onClick(async () => {
-        cmd.filters.push({ key: '', operator: 'equals', value: '' });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-  }
-
-  renderFilter(container, cmdIndex, filterIndex) {
-    const cmd = this.plugin.settings.commands[cmdIndex];
-    const filter = cmd.filters[filterIndex];
-    const row = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key;
-    keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
-
-    const opSelect = row.createEl('select', { cls: 'ffc-select' });
-    for (const op of [{ value: 'equals', label: '=' }, { value: 'not_equals', label: '≠' }, { value: 'contains', label: 'contains' }, { value: 'exists', label: 'exists' }]) {
-      const opt = opSelect.createEl('option', { text: op.label, value: op.value });
-      if (filter.operator === op.value) opt.selected = true;
-    }
-    opSelect.addEventListener('change', async () => { filter.operator = opSelect.value; await this.plugin.saveSettings(); this.display(); });
-
-    if (filter.operator !== 'exists') {
-      const valInput = row.createEl('input', { cls: 'ffc-input ffc-input-val' });
-      valInput.type = 'text'; valInput.placeholder = 'Value'; valInput.value = filter.value;
-      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
-    }
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
-      cmd.filters.splice(filterIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
-    };
-  }
-
-  // ── Object type compact row (list view) ──────────────────────────────────────
-
-  renderObjectTypeRow(containerEl, index) {
-    const obj = this.plugin.settings.objectTypes[index];
-    const row = containerEl.createDiv({ cls: 'ffc-objtype-row' });
-    row.onclick = (e) => {
-      // Only open modal if the click wasn't on an action button
-      if (!e.target.closest('.ffc-objtype-row-actions')) {
-        new ObjectTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
-      }
-    };
-
-    // Left: name + subtitle
-    const info = row.createDiv({ cls: 'ffc-objtype-row-info' });
-    info.createEl('div', { text: obj.name || 'Unnamed', cls: 'ffc-objtype-row-name' });
-    if (obj.description) {
-      info.createEl('div', { text: obj.description, cls: 'ffc-objtype-row-desc' });
-    }
-
-    // Right: action buttons
-    const actions = row.createDiv({ cls: 'ffc-objtype-row-actions' });
-
-    // Gear icon — opens settings modal
-    const gearBtn = actions.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Edit settings' } });
-    obsidian.setIcon(gearBtn, 'settings');
-    gearBtn.onclick = () => {
-      new ObjectTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
-    };
-
-    // Trash icon — delete with confirmation
-    const trashBtn = actions.createEl('button', { cls: 'clickable-icon ffc-btn-icon-danger', attr: { 'aria-label': 'Delete object type' } });
-    obsidian.setIcon(trashBtn, 'trash-2');
-    trashBtn.onclick = () => {
-      new ObjectTypeDeleteModal(this.app, this.plugin, index, () => this.display()).open();
-    };
-  }
-
-  // ── Object type block ─────────────────────────────────────────────────────────
-
-  renderObjectType(containerEl, index) {
-    const obj = this.plugin.settings.objectTypes[index];
-    const block = containerEl.createDiv({ cls: 'ffc-command-block' });
-
-    const header = block.createDiv({ cls: 'ffc-command-header' });
-    header.createEl('span', { text: `Object Type ${index + 1}`, cls: 'ffc-command-label ffc-objtype-label' });
-    header.createEl('button', { text: '✕ Remove', cls: 'mod-warning' }).onclick = async () => {
-      this.plugin.settings.objectTypes.splice(index, 1);
-      await this.plugin.saveSettings();
-      this.display();
-    };
-
-    // Name
-    new obsidian.Setting(block).setName('Object name').setDesc('Creates a "Create new {name}" command in the palette.')
-      .addText((text) => text.setPlaceholder('e.g. Task').setValue(obj.name)
-        .onChange(async (value) => {
-          obj.name = value;
-          await this.plugin.saveSettings();
-          const cmdId = `ffc-objtype-${obj.commandSlug}`;
-          if (this.plugin.commandRefs?.[cmdId]) this.plugin.commandRefs[cmdId].name = `Create new ${value}`;
-          const findCmdId = `${cmdId}-find`;
-          if (this.plugin.commandRefs?.[findCmdId]) this.plugin.commandRefs[findCmdId].name = `Find ${value}`;
-        })
-      );
-    if (obj.commandSlug !== nameToCommandSlug(obj.name)) {
-      block.createEl('p', {
-        text: `⚠ Command ID ("${obj.commandSlug}") was set when this type was first created and no longer matches the current name. Renaming only updates the display — to fix it, change "commandSlug" in data.json to "${nameToCommandSlug(obj.name)}" and rebind any shortcuts.`,
-        cls: 'ffc-hint ffc-slug-warning',
-      });
-    }
-
-    // ── Object Detection ──────────────────────────────────────────────────────
-    const detectionSection = block.createDiv({ cls: 'ffc-filters-section' });
-    detectionSection.createEl('p', { text: 'Object Detection', cls: 'ffc-filters-title' });
-    detectionSection.createEl('p', {
-      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "Find" command. If no filters are set, files in the Save Folder are used as a fallback.',
-      cls: 'ffc-hint',
-    });
-
-    new obsidian.Setting(detectionSection)
-      .setName('Filter match mode')
-      .setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
-      .addDropdown((dd) =>
-        dd
-          .addOption('all', 'Match ALL (AND)')
-          .addOption('any', 'Match ANY (OR)')
-          .setValue(obj.matchMode ?? 'all')
-          .onChange(async (value) => { obj.matchMode = value; await this.plugin.saveSettings(); })
-      );
-
-    if (!obj.matchFilters || obj.matchFilters.length === 0) {
-      detectionSection.createEl('p', { text: 'No filters — save folder will be used as a fallback.', cls: 'ffc-hint' });
-    }
-    for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
-      this.renderObjectMatchFilter(detectionSection, index, fi);
-    }
-    new obsidian.Setting(detectionSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Detection Filter').onClick(async () => {
-        if (!obj.matchFilters) obj.matchFilters = [];
-        obj.matchFilters.push({ key: '', operator: 'equals', value: '' });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Show in trigger menu')
-      .setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || '@'}" inline trigger menu.`)
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showInTriggerMenu ?? false)
-          .onChange(async (value) => { obj.showInTriggerMenu = value; await this.plugin.saveSettings(); })
-      );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Enable "Find" command')
-      .setDesc(`When enabled, adds a "Find ${obj.name}" command to the palette for fuzzy-searching files of this type.`)
-      .addToggle((toggle) =>
-        toggle.setValue(obj.enableFindCommand ?? false)
-          .onChange(async (value) => {
-            obj.enableFindCommand = value;
-            await this.plugin.saveSettings();
-            if (value) this.plugin.registerFindCommand(obj);
-          })
-      );
-
-    new obsidian.Setting(detectionSection)
-      .setName('Style object links')
-      .setDesc('When enabled, inline links to files of this type will have their underline removed and a background fill applied (using tag style variables).')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.styledLinks ?? false)
-          .onChange(async (value) => {
-            obj.styledLinks = value;
-            await this.plugin.saveSettings();
-            this.plugin.buildStyledObjectSet();
-            this.plugin.refreshObjectLinkStyles();
-          })
-      );
-
-    // Template picker
-    const templateFiles = this.plugin.getTemplateFiles();
-    if (templateFiles.length > 0) {
-      new obsidian.Setting(block).setName('Template').setDesc('Template file applied when creating a new object of this type.')
-        .addDropdown((dd) => {
-          dd.addOption('', '— None —');
-          for (const f of templateFiles) dd.addOption(f.path, f.basename);
-          dd.setValue(obj.templatePath || '');
-          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); });
-        });
-    } else {
-      new obsidian.Setting(block).setName('Template').setDesc('No templates found. Set the templates folder above, or check it contains .md files.')
-        .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
-          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); })
-        );
-    }
-
-    // Save folder
-    new obsidian.Setting(block).setName('Save folder').setDesc('Where new files are created (e.g. "Projects/Tasks"). Leave blank for vault root.')
-      .addText((text) => text.setPlaceholder('e.g. Projects/Tasks').setValue(obj.saveFolder || '')
-        .onChange(async (value) => { obj.saveFolder = value.trim(); await this.plugin.saveSettings(); })
-      );
-
-    // ── Creation Fields ───────────────────────────────────────────────────────
-    const fieldsSection = block.createDiv({ cls: 'ffc-filters-section' });
-    fieldsSection.createEl('p', { text: 'Creation Fields', cls: 'ffc-filters-title' });
-    fieldsSection.createEl('p', {
-      text: 'Fields shown in the creation dialog. Values are written into the new file\'s frontmatter.',
-      cls: 'ffc-hint',
-    });
-
-    for (let fi = 0; fi < (obj.fields ?? []).length; fi++) {
-      this.renderObjectField(fieldsSection, index, fi);
-    }
-
-    new obsidian.Setting(fieldsSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Field').onClick(async () => {
-        if (!obj.fields) obj.fields = [];
-        obj.fields.push({ key: '', label: '', type: 'text' });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-
-    // ── Preview Fields ────────────────────────────────────────────────────────
-    const previewSection = block.createDiv({ cls: 'ffc-filters-section' });
-    previewSection.createEl('p', { text: 'Preview Fields', cls: 'ffc-filters-title' });
-    previewSection.createEl('p', {
-      text: 'Frontmatter keys shown when hovering over a link to an object of this type. The title is always shown; these fields appear below it.',
-      cls: 'ffc-hint',
-    });
-
-    for (let fi = 0; fi < (obj.previewFields ?? []).length; fi++) {
-      this.renderPreviewField(previewSection, index, fi);
-    }
-
-    new obsidian.Setting(previewSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Preview Field').onClick(async () => {
-        if (!obj.previewFields) obj.previewFields = [];
-        obj.previewFields.push({ key: '', label: '' });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-
-    new obsidian.Setting(previewSection)
-      .setName('Show cover image in preview')
-      .setDesc('Show the image from the Image Key at the top of the hover card. Configure the key in the object type\'s full settings.')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showImageInPreview ?? false)
-          .onChange(async (value) => { obj.showImageInPreview = value; await this.plugin.saveSettings(); })
-      );
-  }
-
-  renderObjectMatchFilter(container, objIndex, filterIndex) {
-    const obj = this.plugin.settings.objectTypes[objIndex];
-    const filter = obj.matchFilters[filterIndex];
-    const row = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const isPathOp = filter.operator === 'in_folder' || filter.operator === 'not_in_folder';
-
-    // Key input — hidden for path-based operators (path is the implicit "key")
-    if (!isPathOp) {
-      const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-      keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key ?? '';
-      keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
-    }
-
-    const opSelect = row.createEl('select', { cls: 'ffc-select' });
-    for (const op of [
-      { value: 'equals',       label: '=' },
-      { value: 'not_equals',   label: '≠' },
-      { value: 'contains',     label: 'contains' },
-      { value: 'exists',       label: 'exists' },
-      { value: 'in_folder',    label: 'in folder' },
-      { value: 'not_in_folder',label: 'not in folder' },
-    ]) {
-      const opt = opSelect.createEl('option', { text: op.label, value: op.value });
-      if (filter.operator === op.value) opt.selected = true;
-    }
-    opSelect.addEventListener('change', async () => { filter.operator = opSelect.value; await this.plugin.saveSettings(); this.display(); });
-
-    const needsValue = filter.operator !== 'exists';
-    if (needsValue) {
-      const valInput = row.createEl('input', { cls: 'ffc-input ffc-input-val' });
-      valInput.type = 'text';
-      valInput.placeholder = isPathOp ? 'Folder path (e.g. Templates)' : 'Value';
-      valInput.value = filter.value ?? '';
-      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
-    }
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
-      obj.matchFilters.splice(filterIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
-    };
-  }
-
-  renderObjectField(container, objIndex, fieldIndex) {
-    const obj = this.plugin.settings.objectTypes[objIndex];
-    const field = obj.fields[fieldIndex];
-    const row = container.createDiv({ cls: 'ffc-filter-row' });
-
-    // Label
-    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
-    labelInput.type = 'text'; labelInput.placeholder = 'Label'; labelInput.value = field.label ?? '';
-    labelInput.title = 'Display label shown in the creation dialog';
-    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
-
-    // Key
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
-    keyInput.title = 'The frontmatter property key written into the new file';
-    keyInput.addEventListener('change', async () => { field.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
-
-    // Type dropdown
-    const typeSelect = row.createEl('select', { cls: 'ffc-select' });
-    for (const t of [{ value: 'text', label: 'Text' }, { value: 'list', label: 'List' }]) {
-      const opt = typeSelect.createEl('option', { text: t.label, value: t.value });
-      if (field.type === t.value) opt.selected = true;
-    }
-    typeSelect.title = 'List splits comma-separated input into a YAML array';
-    typeSelect.addEventListener('change', async () => { field.type = typeSelect.value; await this.plugin.saveSettings(); });
-
-    // Remove
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
-      obj.fields.splice(fieldIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
-    };
-  }
-
-  renderPreviewField(container, objIndex, fieldIndex) {
-    const obj   = this.plugin.settings.objectTypes[objIndex];
-    const field = obj.previewFields[fieldIndex];
-    const row   = container.createDiv({ cls: 'ffc-filter-row' });
-
-    // Display label (optional — falls back to key if blank)
-    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
-    labelInput.type        = 'text';
-    labelInput.placeholder = 'Display label';
-    labelInput.value       = field.label ?? '';
-    labelInput.title       = 'Label shown in the preview card (leave blank to use the key name)';
-    labelInput.addEventListener('change', async () => {
-      field.label = labelInput.value;
-      await this.plugin.saveSettings();
-    });
-
-    // Frontmatter key
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type        = 'text';
-    keyInput.placeholder = 'Frontmatter key';
-    keyInput.value       = field.key ?? '';
-    keyInput.title       = 'The frontmatter property key whose value will appear in the preview';
-    keyInput.addEventListener('change', async () => {
-      field.key = keyInput.value.trim();
-      await this.plugin.saveSettings();
-      this.plugin.buildStyledObjectSet();
-      this.plugin.refreshObjectLinkStyles();
-    });
-
-    // Remove
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
-      obj.previewFields.splice(fieldIndex, 1);
-      await this.plugin.saveSettings();
-      this.plugin.buildStyledObjectSet();
-      this.plugin.refreshObjectLinkStyles();
-      this.display();
-    };
-  }
-
-}
-
-// ─── Object Preview Popup ─────────────────────────────────────────────────────
-//
-// Shows a Linear-style hover card when the user hovers over an object link
-// (any link whose target matches an object type that has previewFields set).
-// Works in both reading mode (<a class="internal-link">) and live-preview
-// (CM6 decorated spans).
-
-class ObjectPreviewPopup {
-  constructor(plugin) {
-    this.plugin       = plugin;
-    this.popup        = null;
-    this.hideTimer    = null;
-    this.showTimer    = null;
-    this._currentFile = null;   // file the popup is currently displaying
-
-    this._onMouseOver  = this._handleMouseOver.bind(this);
-    this._onMouseOut   = this._handleMouseOut.bind(this);
-    document.addEventListener('mouseover', this._onMouseOver, true);
-    document.addEventListener('mouseout',  this._onMouseOut,  true);
-
-    // Hide popup whenever the user navigates to a different file.
-    this._leafChangeRef = plugin.app.workspace.on('active-leaf-change', () => this.hide());
-    plugin.registerEvent(this._leafChangeRef);
-  }
-
-  // ── Mouse event handlers ──────────────────────────────────────────────────────
-
-  _handleMouseOver(e) {
-    // Ignore events originating inside the popup itself (e.g. wiki links in preview rows)
-    if (this.popup && this.popup.contains(e.target)) return;
-    const el = e.target;
-    let linkpath = null;
-
-    // Reading mode: <a class="internal-link" data-href="filename">
-    const anchor = el.matches('a.internal-link[data-href]')
-      ? el
-      : el.closest('a.internal-link[data-href]');
-    if (anchor) {
-      linkpath = anchor.getAttribute('data-href').split('#')[0].trim();
-    }
-
-    // Live-preview mode: <span class="cm-hmd-internal-link">filename</span>
-    // No data-href — the text content IS the link target.
-    if (!linkpath) {
-      const cmSpan = el.classList.contains('cm-hmd-internal-link')
-        ? el
-        : el.closest('.cm-hmd-internal-link');
-      if (cmSpan) {
-        // Strip [[ ]] visible when cursor is on the raw wikilink; drop alias after |
-        linkpath = (cmSpan.textContent ?? '')
-          .replace(/^\[\[/, '').replace(/\]\]$/, '')
-          .split('|')[0].split('#')[0].trim();
-      }
-    }
-
-    if (!linkpath) return;
-
-    // Use Obsidian's resolver — handles short names, paths, and aliases
-    const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, '');
-    if (!file) return;
-
-    const objType = this._getObjectTypeForFile(file);
-    if (!objType) return;
-
-    clearTimeout(this.hideTimer);
-    clearTimeout(this.showTimer);
-    // Popup already open for this exact file — just keep it alive, don't rebuild.
-    if (this.popup && this._currentFile === file) return;
-    const triggerEl = anchor ?? el.closest('.cm-hmd-internal-link') ?? null;
-    this.showTimer = setTimeout(() => {
-      this._showForFile(file, objType, e.clientX, e.clientY, triggerEl);
-    }, 280);
-  }
-
-  _handleMouseOut(e) {
-    clearTimeout(this.showTimer);
-    // Keep popup alive if the mouse moves into the popup itself
-    const toEl = e.relatedTarget;
-    if (this.popup && this.popup.contains(toEl)) return;
-    this.hideTimer = setTimeout(() => this.hide(), 200);
-  }
-
-  // ── Build and position the popup ──────────────────────────────────────────────
-
-  async _showForFile(file, objType, clientX, clientY, triggerEl = null) {
-    const hasFields = (objType.previewFields?.length > 0);
-    const hasImage  = !!(objType.showImageInPreview && objType.imageKey);
-    if (!hasFields && !hasImage) return;
-
-    const app = this.plugin.app;
-
-    // Get frontmatter
-    const fm    = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const title = fm.title ? String(fm.title) : file.basename;
-
-    // Tear down any existing popup
-    this.hide();
-
-    const popup = document.createElement('div');
-    popup.className = 'ffc-preview-popup';
-
-    // ── Cover image ───────────────────────────────────────────────────────────
-    if (hasImage) {
-      const rawImg = fm[objType.imageKey];
-      const imgSrc = rawImg ? await this._resolveImageSrc(String(rawImg).trim(), app) : null;
-      if (imgSrc) {
-        const imgEl = popup.createEl('img', { cls: 'ffc-preview-image' });
-        imgEl.src = imgSrc;
-        imgEl.alt = title;
-      }
-    }
-
-    // ── Title row ─────────────────────────────────────────────────────────────
-    const header = popup.createDiv({ cls: 'ffc-preview-header' });
-    header.createEl('span', { text: title, cls: 'ffc-preview-title' });
-
-    popup.createEl('hr', { cls: 'ffc-preview-divider' });
-
-    // ── Frontmatter field rows ────────────────────────────────────────────────
-    const body    = popup.createDiv({ cls: 'ffc-preview-body' });
-    let   hasRows = false;
-    for (const pf of (objType.previewFields ?? [])) {
-      const key   = typeof pf === 'string' ? pf : (pf.key ?? '');
-      const label = (typeof pf === 'string' ? pf : (pf.label || pf.key)) || key;
-      if (!key) continue;
-      const raw = fm[key];
-      if (raw === undefined || raw === null || raw === '') continue;
-
-      // Helper: render a single value string — wiki links become clickable <a> tags
-      const renderValue = (valueEl, str) => {
-        const wikiMatch = String(str).match(/^\[\[(.+?)(?:\|(.+?))?\]\]$/);
-        if (wikiMatch) {
-          const linkPath  = wikiMatch[1];
-          const linkLabel = wikiMatch[2] || wikiMatch[1];
-          const a = valueEl.createEl('a', { text: linkLabel, cls: 'ffc-preview-wikilink internal-link' });
-          a.dataset.href = linkPath;
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.hide();
-            app.workspace.openLinkText(linkPath, '', false);
-          });
-        } else {
-          valueEl.appendText(String(str));
-        }
-      };
-
-      const row = body.createDiv({ cls: 'ffc-preview-row' });
-      row.createEl('span', { text: label, cls: 'ffc-preview-label' });
-      const valueEl = row.createEl('span', { cls: 'ffc-preview-value' });
-      if (Array.isArray(raw)) {
-        raw.forEach((item, i) => {
-          if (i > 0) valueEl.appendText(', ');
-          renderValue(valueEl, item);
-        });
-      } else {
-        renderValue(valueEl, raw);
-      }
-      hasRows = true;
-    }
-
-    // Nothing to show below the title → still show title-only card
-    if (!hasRows) {
-      body.remove();
-      popup.querySelector('.ffc-preview-divider')?.remove();
-    }
-
-    document.body.appendChild(popup);
-    this.popup        = popup;
-    this._currentFile = file;
-
-    // Keep popup alive while mouse is over it.
-    popup.addEventListener('mouseenter', () => clearTimeout(this.hideTimer));
-    popup.addEventListener('mouseleave', () => {
-      this.hideTimer = setTimeout(() => this.hide(), 200);
-    });
-
-    // Click anywhere on the popup (except on an embedded wikilink, which has
-    // its own handler) → navigate to the previewed file. Listener lives on the
-    // popup element itself — NOT at document level — so clicks on the trigger
-    // link are completely untouched and Obsidian's native link handling runs.
-    popup.addEventListener('click', (e) => {
-      if (e.target.closest('.ffc-preview-wikilink')) return;
-      const fileToOpen = this._currentFile;
-      this.hide();
-      if (fileToOpen) {
-        const newLeaf = e.metaKey || e.ctrlKey ? 'tab' : false;
-        // openLinkText is more reliable than getLeaf().openFile() across
-        // Obsidian versions and handles leaf selection internally.
-        this.plugin.app.workspace.openLinkText(fileToOpen.basename, '', newLeaf);
-      }
-    });
-
-    // Position the popup below the trigger element.
-    const margin = 12;
-    const vw     = window.innerWidth;
-    const vh     = window.innerHeight;
-
-    // Use a rAF-deferred measurement so the browser has laid out the popup
-    // and offsetWidth/Height are accurate before we position it.
-    const positionPopup = () => {
-      if (!this.popup) return;
-      const pw = popup.offsetWidth  || 280;
-      const ph = popup.offsetHeight || 120;
-      let left, top;
-
-      const r = triggerEl ? triggerEl.getBoundingClientRect() : null;
-      if (r && (r.width > 0 || r.height > 0)) {
-        // Anchor below the trigger, left-aligned but never overlapping it
-        left = r.left;
-        top  = r.bottom + 6;
-        // Flip above if too close to bottom edge
-        if (top  + ph > vh - margin) top  = r.top - ph - 6;
-        // Shift left so right edge of popup doesn't overflow viewport
-        if (left + pw > vw - margin) left = vw - margin - pw;
-      } else {
-        left = clientX + margin;
-        top  = clientY + margin;
-        if (left + pw > vw - margin) left = clientX - pw - margin;
-        if (top  + ph > vh - margin) top  = clientY - ph - margin;
-      }
-      popup.style.left = `${Math.max(margin, left)}px`;
-      popup.style.top  = `${Math.max(margin, top)}px`;
-    };
-    requestAnimationFrame(positionPopup);
-  }
-
-  /**
-   * Resolve a raw frontmatter image value to a displayable URL.
-   * Handles:
-   *   - Vault wikilinks: "[[image.jpg]]" or bare "image.jpg" / "folder/image.jpg"
-   *   - External URLs: "https://…"
-   */
-  async _resolveImageSrc(rawValue, app) {
-    if (!rawValue) return null;
-    const v = rawValue.trim();
-    if (!v) return null;
-    // External URL → use as-is
-    if (/^https?:\/\//i.test(v)) return v;
-    // Strip wikilink brackets if present: [[img.jpg]] → img.jpg
-    const linkPath = v.replace(/^\[\[/, '').replace(/\]\]$/, '');
-    // Resolve through Obsidian's link resolver (handles short names, aliases, paths)
-    const imageFile = app.metadataCache.getFirstLinkpathDest(linkPath, '');
-    if (imageFile) return app.vault.getResourcePath(imageFile);
-    return null;
-  }
-
-  _getObjectTypeForFile(file) {
-    for (const objType of this.plugin.settings.objectTypes) {
-      // Show popup if there are preview fields OR the image preview is enabled
-      const hasContent = (objType.previewFields?.length > 0) ||
-                         (objType.showImageInPreview && objType.imageKey);
-      if (!hasContent) continue;
-      const files = this.plugin.getObjectTypeFiles(objType);
-      if (files.some((f) => f.path === file.path)) return objType;
-    }
-    return null;
-  }
-
-  // ── Public ────────────────────────────────────────────────────────────────────
-
-  hide() {
-    if (this.popup) { this.popup.remove(); this.popup = null; }
-    this._currentFile = null;
-  }
-
-  destroy() {
-    this.hide();
-    clearTimeout(this.hideTimer);
-    clearTimeout(this.showTimer);
-    document.removeEventListener('mouseover', this._onMouseOver, true);
-    document.removeEventListener('mouseout',  this._onMouseOut,  true);
-  }
-}
-
-// ─── Object Type Inline Suggest ───────────────────────────────────────────────
-//
-// Watches the editor for the user-configured trigger key (e.g. "@") and opens
-// a fuzzy suggestion menu populated by all files that match any object type's
-// match filters. Selecting an item inserts a [[wikilink]] at the cursor.
-
-class ObjectTypeSuggest extends obsidian.EditorSuggest {
-  constructor(app, plugin) {
-    super(app);
-    this.plugin = plugin;
-  }
-
-  onTrigger(cursor, editor /*, file */) {
-    const triggerKey = this.plugin.settings.triggerKey;
-    if (!triggerKey) return null;
-
-    const line = editor.getLine(cursor.line);
-    const sub = line.substring(0, cursor.ch);
-
-    // Find the last occurrence of the trigger key on this line
-    const triggerIndex = sub.lastIndexOf(triggerKey);
-    if (triggerIndex === -1) return null;
-
-    // If there's already a space after the trigger key (but not right after it)
-    // that contains a space in the middle, the user has likely moved on — don't
-    // re-trigger. Allow spaces within the query for multi-word file names.
-    const query = sub.substring(triggerIndex + triggerKey.length);
-
-    // Don't fire inside an existing wikilink (after "[[")
-    const beforeTrigger = sub.substring(0, triggerIndex);
-    if (beforeTrigger.includes('[[') && !beforeTrigger.includes(']]')) return null;
-
-    return {
-      start: { line: cursor.line, ch: triggerIndex },
-      end: cursor,
-      query,
-    };
-  }
-
-  getSuggestions(context) {
-    const query = context.query.toLowerCase();
-    const files = this._getMatchingFiles();
-    return files
-      .map((file) => {
-        const cache = this.app.metadataCache.getFileCache(file);
-        const title = cache?.frontmatter?.title ? String(cache.frontmatter.title) : file.basename;
-        return { file, title };
-      })
-      .filter(({ title }) => title.toLowerCase().includes(query))
-      .sort((a, b) => {
-        // Prefer results that start with the query
-        const aStarts = a.title.toLowerCase().startsWith(query) ? 0 : 1;
-        const bStarts = b.title.toLowerCase().startsWith(query) ? 0 : 1;
-        return aStarts - bStarts || a.title.localeCompare(b.title);
-      })
-      .slice(0, 30);
-  }
-
-  /** Collect all files matching object types that have showInTriggerMenu enabled. */
-  _getMatchingFiles() {
-    const plugin = this.plugin;
-    const seen = new Set();
-    const result = [];
-
-    for (const objType of plugin.settings.objectTypes) {
-      if (!objType.showInTriggerMenu) continue;
-      for (const file of plugin.getObjectTypeFiles(objType)) {
-        if (!seen.has(file.path)) {
-          seen.add(file.path);
-          result.push(file);
-        }
-      }
-    }
-
-    return result;
-  }
-
-  renderSuggestion({ file, title }, el) {
-    // el is already .suggestion-item — use Obsidian's built-in suggestion classes
-    el.createEl('span', { text: title, cls: 'suggestion-title' });
-    const folder = file.parent?.path;
-    if (folder && folder !== '/') {
-      el.createEl('span', { text: folder, cls: 'suggestion-note' });
-    }
-  }
-
-  selectSuggestion({ file, title }, _evt) {
-    const context = this.context;
-    if (!context) return;
-
-    // Replace the trigger key + query with a wikilink.
-    // Use display text only when the title differs from the filename (e.g. a
-    // frontmatter title is set), so the link stays clean in the common case.
-    const link = title !== file.basename
-      ? `[[${file.basename}|${title}]]`
-      : `[[${file.basename}]]`;
-
-    context.editor.replaceRange(link, context.start, context.end);
-  }
-}
-
-// ─── Object Link View Plugin (CM6 live-preview decoration) ───────────────────
-//
-// Scans the CM6 document for wikilinks whose targets are detected objects with
-// styledLinks enabled, and marks those ranges with the `ffc-obj-link` class so
-// CSS can remove the underline and add a background fill.
-
+};
+
+// src/views/object-link-view-plugin.ts
+var import_view = require("@codemirror/view");
+var import_state = require("@codemirror/state");
 function buildObjectLinkViewPlugin(ffcPlugin) {
-  return ViewPlugin.fromClass(
+  return import_view.ViewPlugin.fromClass(
     class {
       constructor(view) {
         this.decorations = this.build(view);
         this.applyFoldedLinkClasses(view);
       }
-
       update(update) {
         if (update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.build(update.view);
           this.applyFoldedLinkClasses(update.view);
         }
       }
-
-      // When the cursor is outside a [[wikilink]], Obsidian replaces the CM6
-      // spans with a widget <a> element. Decoration.mark() doesn't reach those
-      // widgets, so we apply the class directly to the DOM elements here.
+      /**
+       * When the cursor is outside a wikilink, Obsidian replaces CM6 spans with
+       * a widget <a> element. Decoration.mark() doesn't reach those widgets, so
+       * we apply the class directly to the DOM elements here.
+       */
       applyFoldedLinkClasses(view) {
-        const basenames        = ffcPlugin.styledObjectBasenames;
+        const basenames = ffcPlugin.styledObjectBasenames;
         const previewBasenames = ffcPlugin.previewObjectBasenames;
-        const hasStyled  = basenames        && basenames.size > 0;
+        const hasStyled = basenames && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
-        view.dom.querySelectorAll('a.internal-link[data-href]').forEach((el) => {
-          const href     = el.getAttribute('data-href').split('#')[0].trim();
-          const basename = href.includes('/') ? href.split('/').pop() : href;
-          el.classList.toggle('ffc-obj-link',         hasStyled  && (basenames.has(href)        || basenames.has(basename)));
-          el.classList.toggle('ffc-obj-preview-link', hasPreview && (previewBasenames.has(href) || previewBasenames.has(basename)));
+        view.dom.querySelectorAll("a.internal-link[data-href]").forEach((el) => {
+          var _a, _b;
+          const href = ((_a = el.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
+          const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
+          el.classList.toggle(
+            "ffc-obj-link",
+            hasStyled && (basenames.has(href) || basenames.has(basename))
+          );
+          el.classList.toggle(
+            "ffc-obj-preview-link",
+            hasPreview && (previewBasenames.has(href) || previewBasenames.has(basename))
+          );
         });
       }
-
       build(view) {
-        const basenames        = ffcPlugin.styledObjectBasenames;
+        var _a;
+        const basenames = ffcPlugin.styledObjectBasenames;
         const previewBasenames = ffcPlugin.previewObjectBasenames;
-        const hasStyled  = basenames        && basenames.size > 0;
+        const hasStyled = basenames && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
-        if (!hasStyled && !hasPreview) return Decoration.none;
-        const builder = new RangeSetBuilder();
+        if (!hasStyled && !hasPreview)
+          return import_view.Decoration.none;
+        const builder = new import_state.RangeSetBuilder();
         const text = view.state.doc.toString();
-        // Matches [[Target]], [[Target|Alias]], [[Target#Heading]], etc.
         const re = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
         let m;
         while ((m = re.exec(text)) !== null) {
           const target = m[1].trim();
-          const targetBasename = target.includes('/') ? target.split('/').pop() : target;
-          const isStyled  = hasStyled  && (basenames.has(target)        || basenames.has(targetBasename));
-          const isPreview = hasPreview && (previewBasenames.has(target)  || previewBasenames.has(targetBasename));
+          const targetBasename = target.includes("/") ? (_a = target.split("/").pop()) != null ? _a : target : target;
+          const isStyled = hasStyled && (basenames.has(target) || basenames.has(targetBasename));
+          const isPreview = hasPreview && (previewBasenames.has(target) || previewBasenames.has(targetBasename));
           if (isStyled || isPreview) {
-            const cls = [isStyled ? 'ffc-obj-link' : '', isPreview ? 'ffc-obj-preview-link' : ''].filter(Boolean).join(' ');
-            builder.add(m.index, m.index + m[0].length, Decoration.mark({ class: cls }));
+            const cls = [isStyled ? "ffc-obj-link" : "", isPreview ? "ffc-obj-preview-link" : ""].filter(Boolean).join(" ");
+            builder.add(m.index, m.index + m[0].length, import_view.Decoration.mark({ class: cls }));
           }
         }
         return builder.finish();
@@ -2615,428 +2313,211 @@ function buildObjectLinkViewPlugin(ffcPlugin) {
   );
 }
 
-// ─── Canvas Object Switcher ───────────────────────────────────────────────────
-//
-// Fuzzy quick-switcher that searches across all object files from every object
-// type. Selecting a file creates a canvas text node using that type's configured
-// canvasFields.
-
-class CanvasObjectSwitcher extends obsidian.FuzzySuggestModal {
-  /**
-   * @param {import('obsidian').App} app
-   * @param {FilteredFileCommandsPlugin} plugin
-   * @param {object} canvas   – Obsidian Canvas instance from leaf.view.canvas
-   * @param {{ x: number, y: number } | null} dropPos – canvas-space drop
-   *   position, or null to place at the current viewport centre.
-   */
-  constructor(app, plugin, canvas, dropPos) {
-    super(app);
-    this.plugin  = plugin;
-    this.canvas  = canvas;
-    this.dropPos = dropPos;
-
-    this.setPlaceholder('Search objects…');
-    this.setInstructions([
-      { command: '↑↓', purpose: 'navigate' },
-      { command: '↵',  purpose: 'add to canvas' },
-      { command: 'esc', purpose: 'dismiss' },
-    ]);
-
-    // Build a flat list of { file, objType } pairs, deduplicating by path
-    // (first matching type wins when a file satisfies multiple types).
-    const seen = new Set();
-    this._items = [];
-    for (const objType of plugin.settings.objectTypes) {
-      for (const file of plugin.getObjectTypeFiles(objType)) {
-        if (seen.has(file.path)) continue;
-        seen.add(file.path);
-        this._items.push({ file, objType });
-      }
-    }
+// src/main.ts
+var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
+  constructor() {
+    super(...arguments);
+    this.commandRefs = {};
+    this.registeredCommandIds = /* @__PURE__ */ new Set();
+    this.styledObjectBasenames = /* @__PURE__ */ new Set();
+    this.styledObjectPaths = /* @__PURE__ */ new Set();
+    this.previewObjectBasenames = /* @__PURE__ */ new Set();
+    this.previewObjectPaths = /* @__PURE__ */ new Set();
   }
-
-  // ── FuzzySuggestModal overrides ───────────────────────────────────────────
-
-  getItems() { return this._items; }
-
-  /** The string used for fuzzy matching — include title, basename, and type name. */
-  getItemText({ file, objType }) {
-    const fm    = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const title = fm.title ? String(fm.title) : file.basename;
-    // Including objType.name widens the search surface without showing it twice
-    return `${title} ${file.basename} ${objType.name}`;
-  }
-
-  renderSuggestion({ item: { file, objType } }, el) {
-    const fm    = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const title = fm.title ? String(fm.title) : file.basename;
-    el.createEl('span', { text: title,       cls: 'suggestion-title' });
-    el.createEl('span', { text: objType.name, cls: 'suggestion-note'  });
-  }
-
-  onChooseItem({ file, objType }) {
-    this._createCanvasCard(file, objType);
-  }
-
-  // ── Card creation ─────────────────────────────────────────────────────────
-
-  _createCanvasCard(file, objType) {
-    const fm           = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const title        = fm.title ? String(fm.title) : file.basename;
-    const canvasFields = objType.canvasFields ?? [];
-
-    // ── Cover image embed ─────────────────────────────────────────────────────
-    let imageEmbed = '';
-    if (objType.showImageInCanvas && objType.imageKey) {
-      const rawImg = fm[objType.imageKey];
-      if (rawImg) {
-        const v = String(rawImg).trim();
-        if (/^https?:\/\//i.test(v)) {
-          imageEmbed = `![](${v})\n`;
-        } else {
-          // Strip wikilink brackets if Obsidian stored the value as [[img.jpg]]
-          const inner = v.replace(/^\[\[/, '').replace(/\]\]$/, '');
-          imageEmbed = `![[${inner}]]\n`;
-        }
-      }
-    }
-
-    // Build markdown: optional image, bold title, then one row per canvas field
-    let text = `${imageEmbed}**${title}**`;
-    for (const pf of canvasFields) {
-      const key   = typeof pf === 'string' ? pf : (pf.key   ?? '');
-      const label = typeof pf === 'string' ? pf : (pf.label || pf.key || key);
-      if (!key) continue;
-      const raw = fm[key];
-      if (raw === undefined || raw === null || raw === '') continue;
-      const displayVal = Array.isArray(raw) ? raw.map(String).join(', ') : String(raw);
-      text += `\n${label}: ${displayVal}`;
-    }
-    text += `\n\n[[${file.basename}]]`;
-
-    const pos        = this.dropPos ?? this._getViewportCenter();
-    const imageExtra = imageEmbed ? 200 : 0;
-    const size = { width: 300, height: Math.max(160, 60 + canvasFields.length * 28 + imageExtra) };
-
-    try {
-      const node = this.canvas.createTextNode({
-        pos:  { x: pos.x - size.width / 2, y: pos.y - size.height / 2 },
-        size,
-        text,
-        focus: false,
-        save:  true,
-      });
-      this.canvas.deselectAll?.();
-      if (node) this.canvas.selectOnly?.(node);
-      new obsidian.Notice(`Added "${title}" to canvas`);
-    } catch (err) {
-      new obsidian.Notice(`Could not add card to canvas: ${err.message}`);
-    }
-  }
-
-  /** Convert screen viewport centre to canvas coordinates. */
-  _getViewportCenter() {
-    try {
-      const c = this.canvas;
-      if (typeof c.getViewportBBox === 'function') {
-        const bb = c.getViewportBBox();
-        return { x: (bb.minX + bb.maxX) / 2, y: (bb.minY + bb.maxY) / 2 };
-      }
-      const el   = c.wrapperEl ?? c.canvasEl ?? c.containerEl;
-      const rect = el?.getBoundingClientRect();
-      if (!rect) return { x: 0, y: 0 };
-      const zoom = c.zoom ?? 1;
-      return {
-        x: (rect.width  / 2 - (c.x ?? 0)) / zoom,
-        y: (rect.height / 2 - (c.y ?? 0)) / zoom,
-      };
-    } catch { return { x: 0, y: 0 }; }
-  }
-}
-
-// ─── Plugin ───────────────────────────────────────────────────────────────────
-
-class FilteredFileCommandsPlugin extends obsidian.Plugin {
+  // ── Lifecycle ─────────────────────────────────────────────────────────────────
   async onload() {
     await this.loadSettings();
-    this.commandRefs = {};
-    this.registeredCommandIds = new Set();
-
     this.addSettingTab(new MyPluginSettingTab(this.app, this));
-
-    // ── Filtered Files Widget ─────────────────────────────────────────────────
     this.registerView(FFW_VIEW_TYPE, (leaf) => new FilteredFilesWidgetView(leaf, this));
-    this.addRibbonIcon('file-sliders', 'Open filtered files widget', () => this.activateWidgetView());
+    this.addRibbonIcon("file-sliders", "Open filtered files widget", () => this.activateWidgetView());
     this.addCommand({
-      id:       'ffc-open-filtered-files-widget',
-      name:     'Open filtered files widget',
-      callback: () => this.activateWidgetView(),
+      id: "ffc-open-filtered-files-widget",
+      name: "Open filtered files widget",
+      callback: () => this.activateWidgetView()
     });
-
-    for (const cmd of this.settings.commands) this.registerFilterCommand(cmd);
+    for (const cmd of this.settings.commands)
+      this.registerFilterCommand(cmd);
     for (const obj of this.settings.objectTypes) {
       this.registerObjectTypeCommand(obj);
-      if (obj.enableFindCommand) this.registerFindCommand(obj);
+      if (obj.enableFindCommand)
+        this.registerFindCommand(obj);
     }
     this.registerNewObjectCommand();
-
-    // Register the inline trigger-key suggest
-    this.objectTypeSuggest = new ObjectTypeSuggest(this.app, this);
-    this.registerEditorSuggest(this.objectTypeSuggest);
-
-    // ── Object link styling ───────────────────────────────────────────────────
-    this.styledObjectBasenames  = new Set();
-    this.styledObjectPaths      = new Set();
-    this.previewObjectBasenames = new Set();
-    this.previewObjectPaths     = new Set();
+    this.registerEditorSuggest(new ObjectTypeSuggest(this.app, this));
     this.buildStyledObjectSet();
-
-    // Hover preview popup
     this.previewPopup = new ObjectPreviewPopup(this);
     this.register(() => this.previewPopup.destroy());
-
-    // Reading mode: mark rendered <a class="internal-link"> elements
     this.registerMarkdownPostProcessor((el) => {
-      el.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
-        const href     = link.getAttribute('data-href').split('#')[0].trim();
-        const basename = href.includes('/') ? href.split('/').pop() : href;
+      el.querySelectorAll("a.internal-link[data-href]").forEach((link) => {
+        var _a, _b;
+        const href = ((_a = link.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
+        const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
         if (this.styledObjectBasenames.has(href) || this.styledObjectBasenames.has(basename)) {
-          link.classList.add('ffc-obj-link');
+          link.classList.add("ffc-obj-link");
         }
         if (this.previewObjectBasenames.has(href) || this.previewObjectBasenames.has(basename)) {
-          link.classList.add('ffc-obj-preview-link');
+          link.classList.add("ffc-obj-preview-link");
         }
       });
     });
-
-    // Live preview: CM6 decoration for wikilinks in source/live-preview mode
     this.registerEditorExtension(buildObjectLinkViewPlugin(this));
-
-    // Rebuild whenever the metadata cache settles (new files, frontmatter edits, etc.)
     this.registerEvent(
-      this.app.metadataCache.on('resolved', () => {
+      this.app.metadataCache.on("resolved", () => {
         this.buildStyledObjectSet();
         this.refreshObjectLinkStyles();
       })
     );
-
-    // ── "Object from selection" right-click context menu ─────────────────────────
     this.registerEvent(
-      this.app.workspace.on('editor-menu', (menu, editor) => {
-        const selection = editor.getSelection()?.trim();
-        if (!selection) return;
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        var _a;
+        const selection = (_a = editor.getSelection()) == null ? void 0 : _a.trim();
+        if (!selection)
+          return;
         const types = this.settings.objectTypes;
-        if (types.length === 0) return;
-
-        // Capture selection range now — it will be gone once the menu closes.
-        const from = editor.getCursor('from');
-        const to   = editor.getCursor('to');
-
+        if (types.length === 0)
+          return;
+        const from = editor.getCursor("from");
+        const to = editor.getCursor("to");
         menu.addItem((item) => {
-          item.setTitle('Object from selection')
-              .setIcon('box-select');
-
+          item.setTitle("Object from selection").setIcon("box-select");
           const submenu = item.setSubmenu();
           for (const objType of types) {
             submenu.addItem((subItem) => {
-              subItem.setTitle(objType.name)
-                .onClick(() => {
-                  const current = this.settings.objectTypes.find((o) => o.id === objType.id);
-                  if (!current) { new obsidian.Notice('Object type not found. Try reloading.'); return; }
-                  new NewObjectModal(
-                    this.app, current,
-                    async (title, fv, desc) => {
-                      // Replace BEFORE createObject opens the new file — opening it
-                      // navigates the current leaf away from page A, so the editor
-                      // reference becomes stale if we wait until after.
-                      editor.replaceRange(`[[${title}]]`, from, to);
-                      await this.createObject(current, title, fv, desc);
-                    },
-                    selection
-                  ).open();
-                });
+              subItem.setTitle(objType.name).onClick(() => {
+                const current = this.settings.objectTypes.find((o) => o.id === objType.id);
+                if (!current) {
+                  new import_obsidian14.Notice("Object type not found. Try reloading.");
+                  return;
+                }
+                new NewObjectModal(
+                  this.app,
+                  current,
+                  async (title, fv, desc) => {
+                    editor.replaceRange(`[[${title}]]`, from, to);
+                    await this.createObject(current, title, fv, desc);
+                  },
+                  selection
+                ).open();
+              });
             });
           }
         });
       })
     );
-
-    // ── Canvas card menu buttons ──────────────────────────────────────────────
-    // Inject on load and whenever a new canvas leaf becomes active.
-    // The small delay lets Obsidian finish rendering the canvas toolbar DOM.
     this.injectCanvasButtons();
     this.registerEvent(
-      this.app.workspace.on('active-leaf-change', () => {
+      this.app.workspace.on("active-leaf-change", () => {
         setTimeout(() => this.injectCanvasButtons(), 50);
       })
     );
     this.registerEvent(
-      this.app.workspace.on('layout-change', () => {
+      this.app.workspace.on("layout-change", () => {
         setTimeout(() => this.injectCanvasButtons(), 50);
       })
     );
   }
-
   // ── Canvas card menu button ───────────────────────────────────────────────────
-
-  /**
-   * Walk all open leaves; for any canvas view that doesn't yet have our button,
-   * inject it into `.canvas-card-menu`.
-   */
   injectCanvasButtons() {
     this.app.workspace.iterateAllLeaves((leaf) => this._injectIntoCanvasLeaf(leaf));
   }
-
   _injectIntoCanvasLeaf(leaf) {
-    if (leaf?.view?.getViewType?.() !== 'canvas') return;
-
-    const container = leaf.view.containerEl;
-    const menuEl    = container.querySelector('.canvas-card-menu');
-    if (!menuEl || menuEl.querySelector('.ffc-canvas-object-btn')) return;
-
-    const canvas = leaf.view.canvas;
-
-    // ── Button ────────────────────────────────────────────────────────────────
-    // Use a <div> with mod-draggable to match Obsidian's native canvas toolbar
-    // buttons exactly — same element type, same classes, same hover behaviour.
-    const btn = menuEl.createEl('div', {
-      cls: 'canvas-card-menu-button mod-draggable ffc-canvas-object-btn',
+    var _a, _b, _c;
+    const view = leaf == null ? void 0 : leaf.view;
+    if (((_a = view == null ? void 0 : view.getViewType) == null ? void 0 : _a.call(view)) !== "canvas")
+      return;
+    const container = view.containerEl;
+    const menuEl = container.querySelector(".canvas-card-menu");
+    if (!menuEl || menuEl.querySelector(".ffc-canvas-object-btn"))
+      return;
+    const canvas = view.canvas;
+    const btn = menuEl.createEl("div", {
+      cls: "canvas-card-menu-button mod-draggable ffc-canvas-object-btn"
     });
-    btn.setAttribute('aria-label', 'Add object card');
-    btn.setAttribute('data-tooltip-position', 'top');
-    obsidian.setIcon(btn, 'shapes');
-
-    // The outermost canvas wrapper — used for bounding-rect hit tests.
-    const wrapperEl = canvas.wrapperEl ?? canvas.canvasEl ?? container;
-
-    // ── Unified mousedown handler (click + drag) ──────────────────────────────
-    //
-    // The ghost is inserted as an absolute-positioned child of the same
-    // container that holds all real canvas nodes. That container has the
-    // canvas's zoom+pan CSS transform applied, so positioning the ghost in
-    // canvas coordinates makes it appear exactly where the user's cursor is —
-    // matching how Obsidian's own card-menu ghosts behave.
-    //
-    // Behaviour:
-    //   • Mouse moves < 5 px → treat as click → open switcher at viewport centre
-    //   • Mouse moves ≥ 5 px → show canvas-positioned ghost; on mouseup over
-    //     the canvas, open the switcher with the drop position in canvas coords.
-    btn.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-
-      // Prevent Obsidian's own mod-draggable handler from starting its drag
+    btn.setAttribute("aria-label", "Add object card");
+    btn.setAttribute("data-tooltip-position", "top");
+    const { setIcon: setIcon5 } = require("obsidian");
+    setIcon5(btn, "shapes");
+    const wrapperEl = (_c = (_b = canvas.wrapperEl) != null ? _b : canvas.canvasEl) != null ? _c : container;
+    btn.addEventListener("mousedown", (e) => {
+      if (e.button !== 0)
+        return;
       e.preventDefault();
       e.stopPropagation();
-
-      // Default card dimensions in canvas units (no image, no fields → 300×160)
       const CARD_W = 300;
       const CARD_H = 160;
-
-      // Derive the zoom factor from getViewportBBox so the ghost matches the
-      // rendered card size exactly. canvas.zoom can be 0 / NaN on some builds,
-      // which makes the ghost invisible; the bbox approach is always reliable
-      // because we know it works (drop position already uses it).
       let zoom = 1;
       const _wRect = wrapperEl.getBoundingClientRect();
-      if (typeof canvas.getViewportBBox === 'function' && _wRect.width > 0) {
+      if (typeof canvas.getViewportBBox === "function" && _wRect.width > 0) {
         const _bb = canvas.getViewportBBox();
         const _canvasW = _bb.maxX - _bb.minX;
-        if (_canvasW > 0) zoom = _wRect.width / _canvasW;
+        if (_canvasW > 0)
+          zoom = _wRect.width / _canvasW;
       } else {
         const _z = canvas.zoom;
-        if (typeof _z === 'number' && isFinite(_z) && _z > 0) zoom = _z;
+        if (typeof _z === "number" && isFinite(_z) && _z > 0)
+          zoom = _z;
       }
-
       const GHOST_W = CARD_W * zoom;
       const GHOST_H = CARD_H * zoom;
-
-      // ── Ghost element ─────────────────────────────────────────────────────────
-      // Fixed-position so it follows the viewport cursor exactly regardless of
-      // canvas zoom or pan.  Styled as a card outline matching Obsidian's own
-      // drag-ghost appearance.  translate(-50%,-50%) keeps it centred on the
-      // cursor at all times.
-      const ghost = document.body.createEl('div', { cls: 'ffc-canvas-drop-ghost' });
-      ghost.setAttribute('aria-hidden', 'true');
-      ghost.style.cssText =
-        `width:${GHOST_W}px;height:${GHOST_H}px;` +
-        `position:fixed;pointer-events:none;display:none;` +
-        `transform:translate(-50%,-50%);`;
-
-      const startX   = e.clientX;
-      const startY   = e.clientY;
-      let   dragging = false;
-
+      const ghost = document.body.createEl("div", { cls: "ffc-canvas-drop-ghost" });
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.style.cssText = `width:${GHOST_W}px;height:${GHOST_H}px;position:fixed;pointer-events:none;display:none;transform:translate(-50%,-50%);`;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let dragging = false;
       const onMouseMove = (me) => {
         const dx = me.clientX - startX;
         const dy = me.clientY - startY;
-
         if (!dragging && Math.sqrt(dx * dx + dy * dy) >= 5) {
           dragging = true;
-          ghost.style.display = '';
-          btn.classList.add('is-dragging');
+          ghost.style.display = "";
+          btn.classList.add("is-dragging");
         }
-
         if (dragging) {
-          // Centre the ghost on the cursor in viewport space
           ghost.style.left = `${me.clientX}px`;
-          ghost.style.top  = `${me.clientY}px`;
+          ghost.style.top = `${me.clientY}px`;
         }
       };
-
       const onMouseUp = (ue) => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup',   onMouseUp);
+        var _a2, _b2, _c2;
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
         ghost.remove();
-        btn.classList.remove('is-dragging');
-
+        btn.classList.remove("is-dragging");
         if (!dragging) {
-          // ── Click: open switcher at viewport centre ───────────────────────
           new CanvasObjectSwitcher(this.app, this, canvas, null).open();
           return;
         }
-
-        // ── Drop: only act if the cursor landed over this canvas ──────────────
         const rect = wrapperEl.getBoundingClientRect();
-        if (
-          ue.clientX < rect.left || ue.clientX > rect.right ||
-          ue.clientY < rect.top  || ue.clientY > rect.bottom
-        ) return;
-
-        // Convert screen drop position → canvas coordinates.
-        // getViewportBBox() is the most reliable method: it returns the canvas
-        // unit rect currently visible in the wrapper element, so we can
-        // lerp from pixel offset to canvas units without depending on the
-        // ambiguous canvas.x / canvas.y properties.
+        if (ue.clientX < rect.left || ue.clientX > rect.right || ue.clientY < rect.top || ue.clientY > rect.bottom)
+          return;
+        let pos;
         const relX = ue.clientX - rect.left;
         const relY = ue.clientY - rect.top;
-        let pos;
-        if (typeof canvas.getViewportBBox === 'function') {
+        if (typeof canvas.getViewportBBox === "function") {
           const bb = canvas.getViewportBBox();
           pos = {
-            x: bb.minX + (relX / rect.width)  * (bb.maxX - bb.minX),
-            y: bb.minY + (relY / rect.height) * (bb.maxY - bb.minY),
+            x: bb.minX + relX / rect.width * (bb.maxX - bb.minX),
+            y: bb.minY + relY / rect.height * (bb.maxY - bb.minY)
           };
         } else {
-          const z = canvas.zoom ?? 1;
+          const z = (_a2 = canvas.zoom) != null ? _a2 : 1;
           pos = {
-            x: (relX - (canvas.x ?? 0)) / z,
-            y: (relY - (canvas.y ?? 0)) / z,
+            x: (relX - ((_b2 = canvas.x) != null ? _b2 : 0)) / z,
+            y: (relY - ((_c2 = canvas.y) != null ? _c2 : 0)) / z
           };
         }
-
         new CanvasObjectSwitcher(this.app, this, canvas, pos).open();
       };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup',   onMouseUp);
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
     });
   }
-
   // ── Filtered Files Widget helpers ─────────────────────────────────────────────
-
   async activateWidgetView() {
+    var _a;
     const { workspace } = this.app;
-    let leaf = workspace.getLeavesOfType(FFW_VIEW_TYPE)[0] ?? null;
+    let leaf = (_a = workspace.getLeavesOfType(FFW_VIEW_TYPE)[0]) != null ? _a : null;
     if (!leaf) {
       const newLeaf = workspace.getLeftLeaf(false);
       if (newLeaf) {
@@ -3044,207 +2525,220 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
         leaf = newLeaf;
       }
     }
-    if (leaf) await workspace.revealLeaf(leaf);
+    if (leaf)
+      await workspace.revealLeaf(leaf);
   }
-
   refreshWidgetViews() {
     this.app.workspace.getLeavesOfType(FFW_VIEW_TYPE).forEach((leaf) => {
-      if (leaf.view instanceof FilteredFilesWidgetView) leaf.view.render();
+      if (leaf.view instanceof FilteredFilesWidgetView)
+        leaf.view.render();
     });
   }
-
   // ── Filtered file commands ────────────────────────────────────────────────────
-
   registerFilterCommand(cmd) {
-    if (this.registeredCommandIds.has(cmd.id)) return;
+    if (this.registeredCommandIds.has(cmd.id))
+      return;
     const registered = this.addCommand({
       id: cmd.id,
       name: cmd.name,
       callback: () => {
         const current = this.settings.commands.find((c) => c.id === cmd.id);
-        if (!current) { new obsidian.Notice('Objects: Command not found. Try reloading.'); return; }
+        if (!current) {
+          new import_obsidian14.Notice("Objects: Command not found. Try reloading.");
+          return;
+        }
         const files = this.getFilteredFiles(current);
-        if (files.length === 0) { new obsidian.Notice('Objects: No files match the current filters.'); return; }
+        if (files.length === 0) {
+          new import_obsidian14.Notice("Objects: No files match the current filters.");
+          return;
+        }
         new FilteredFileModal(this.app, files).open();
-      },
+      }
     });
     this.commandRefs[cmd.id] = registered;
     this.registeredCommandIds.add(cmd.id);
   }
-
   getFilteredFiles(cmd) {
-    const fileTypes = (cmd.fileTypes || '').split(',').map((e) => e.trim().toLowerCase().replace(/^\./, '')).filter(Boolean);
-    let allFiles = fileTypes.length > 0
-      ? this.app.vault.getFiles().filter((f) => fileTypes.includes(f.extension.toLowerCase()))
-      : this.app.vault.getMarkdownFiles();
-    if (!cmd.filters || cmd.filters.length === 0) return allFiles;
+    const fileTypes = (cmd.fileTypes || "").split(",").map((e) => e.trim().toLowerCase().replace(/^\./, "")).filter(Boolean);
+    const allFiles = fileTypes.length > 0 ? this.app.vault.getFiles().filter((f) => fileTypes.includes(f.extension.toLowerCase())) : this.app.vault.getMarkdownFiles();
+    if (!cmd.filters || cmd.filters.length === 0)
+      return allFiles;
     return allFiles.filter((file) => {
-      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+      var _a, _b;
+      const fm = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
       const results = cmd.filters.map((f) => this.evaluateFilter(fm, f, file));
-      return cmd.matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
+      return cmd.matchMode === "all" ? results.every(Boolean) : results.some(Boolean);
     });
   }
-
-  /** Return all vault files that match a single object type's detection filters. */
   getObjectTypeFiles(obj) {
-    const filters = obj.matchFilters ?? [];
-    const matchMode = obj.matchMode ?? 'all';
-    const allFiles = this.app.vault.getMarkdownFiles();
-    return allFiles.filter((file) => {
+    var _a, _b;
+    const filters = (_a = obj.matchFilters) != null ? _a : [];
+    const matchMode = (_b = obj.matchMode) != null ? _b : "all";
+    return this.app.vault.getMarkdownFiles().filter((file) => {
+      var _a2, _b2, _c;
       if (filters.length > 0) {
-        const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+        const fm = (_b2 = (_a2 = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter) != null ? _b2 : {};
         const results = filters.map((f) => this.evaluateFilter(fm, f, file));
-        return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
-      } else if (obj.saveFolder?.trim()) {
-        const prefix = obj.saveFolder.trim().replace(/\/$/, '') + '/';
+        return matchMode === "all" ? results.every(Boolean) : results.some(Boolean);
+      } else if ((_c = obj.saveFolder) == null ? void 0 : _c.trim()) {
+        const prefix = obj.saveFolder.trim().replace(/\/$/, "") + "/";
         return file.path.startsWith(prefix);
       }
       return false;
     });
   }
-
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   evaluateFilter(fm, filter, file) {
     const { key, operator, value } = filter;
-
-    // Path-based operators — work on the file path, not frontmatter
-    if (operator === 'in_folder' || operator === 'not_in_folder') {
-      if (!file) return true;
-      const folder = value.trim().replace(/\/$/, '');
-      const inFolder = file.path.startsWith(folder + '/') || file.path === folder;
-      return operator === 'in_folder' ? inFolder : !inFolder;
+    if (operator === "in_folder" || operator === "not_in_folder") {
+      if (!file)
+        return true;
+      const folder = value.trim().replace(/\/$/, "");
+      const inFolder = file.path.startsWith(folder + "/") || file.path === folder;
+      return operator === "in_folder" ? inFolder : !inFolder;
     }
-
-    if (!key?.trim()) return true;
+    if (!(key == null ? void 0 : key.trim()))
+      return true;
     const raw = fm[key];
     switch (operator) {
-      case 'exists':     return raw !== undefined && raw !== null && raw !== '';
-      case 'equals':     return Array.isArray(raw) ? raw.map(String).includes(value) : String(raw ?? '') === value;
-      case 'not_equals': return Array.isArray(raw) ? !raw.map(String).includes(value) : String(raw ?? '') !== value;
-      case 'contains':   return Array.isArray(raw) ? raw.some((v) => String(v).toLowerCase().includes(value.toLowerCase())) : String(raw ?? '').toLowerCase().includes(value.toLowerCase());
-      default: return true;
+      case "exists":
+        return raw !== void 0 && raw !== null && raw !== "";
+      case "equals":
+        return Array.isArray(raw) ? raw.map(String).includes(value) : String(raw != null ? raw : "") === value;
+      case "not_equals":
+        return Array.isArray(raw) ? !raw.map(String).includes(value) : String(raw != null ? raw : "") !== value;
+      case "contains":
+        return Array.isArray(raw) ? raw.some((v) => String(v).toLowerCase().includes(value.toLowerCase())) : String(raw != null ? raw : "").toLowerCase().includes(value.toLowerCase());
+      default:
+        return true;
     }
   }
-
   // ── Object type commands ──────────────────────────────────────────────────────
-
   registerObjectTypeCommand(obj) {
     const cmdId = `ffc-objtype-${obj.commandSlug}`;
-    if (this.registeredCommandIds.has(cmdId)) return;
+    if (this.registeredCommandIds.has(cmdId))
+      return;
     const registered = this.addCommand({
       id: cmdId,
       name: `Create new ${obj.name}`,
       callback: () => {
         const current = this.settings.objectTypes.find((o) => o.id === obj.id);
-        if (!current) { new obsidian.Notice('Object type not found. Try reloading.'); return; }
-        new NewObjectModal(this.app, current, (title, fieldValues, description) => this.createObject(current, title, fieldValues, description)).open();
-      },
+        if (!current) {
+          new import_obsidian14.Notice("Object type not found. Try reloading.");
+          return;
+        }
+        new NewObjectModal(
+          this.app,
+          current,
+          (title, fieldValues, description) => this.createObject(current, title, fieldValues, description)
+        ).open();
+      }
     });
     this.commandRefs[cmdId] = registered;
     this.registeredCommandIds.add(cmdId);
   }
-
   registerFindCommand(obj) {
     const cmdId = `ffc-objtype-${obj.commandSlug}-find`;
-    if (this.registeredCommandIds.has(cmdId)) return;
+    if (this.registeredCommandIds.has(cmdId))
+      return;
     const registered = this.addCommand({
       id: cmdId,
       name: `Find ${obj.name}`,
       callback: () => {
         const current = this.settings.objectTypes.find((o) => o.id === obj.id);
-        if (!current) { new obsidian.Notice('Objects: Object type not found. Try reloading.'); return; }
+        if (!current) {
+          new import_obsidian14.Notice("Objects: Object type not found. Try reloading.");
+          return;
+        }
         const files = this.getObjectTypeFiles(current);
-        if (files.length === 0) { new obsidian.Notice('Objects: No files match this object type.'); return; }
+        if (files.length === 0) {
+          new import_obsidian14.Notice("Objects: No files match this object type.");
+          return;
+        }
         new FilteredFileModal(this.app, files, current.name).open();
-      },
+      }
     });
     this.commandRefs[cmdId] = registered;
     this.registeredCommandIds.add(cmdId);
   }
-
   registerNewObjectCommand() {
     this.addCommand({
-      id: 'ffc-new-object',
-      name: 'New object',
+      id: "ffc-new-object",
+      name: "New object",
       callback: () => {
         const types = this.settings.objectTypes;
         if (types.length === 0) {
-          new obsidian.Notice('No object types defined. Add one in the Objects settings.');
+          new import_obsidian14.Notice("No object types defined. Add one in the Objects settings.");
           return;
         }
         if (types.length === 1) {
-          new NewObjectModal(this.app, types[0], (title, fv, desc) => this.createObject(types[0], title, fv, desc)).open();
+          new NewObjectModal(
+            this.app,
+            types[0],
+            (title, fv, desc) => this.createObject(types[0], title, fv, desc)
+          ).open();
           return;
         }
-        new CombinedNewObjectModal(this.app, types, (objType, title, fv, desc) => this.createObject(objType, title, fv, desc)).open();
-      },
+        new CombinedNewObjectModal(
+          this.app,
+          types,
+          (objType, title, fv, desc) => this.createObject(objType, title, fv, desc)
+        ).open();
+      }
     });
   }
-
   // ── File creation ─────────────────────────────────────────────────────────────
-
-  async createObject(objType, title, fieldValues = {}, description = '') {
-    const saveFolder = objType.saveFolder?.trim() ?? '';
+  async createObject(objType, title, fieldValues = {}, description = "") {
+    var _a, _b;
+    const saveFolder = (_b = (_a = objType.saveFolder) == null ? void 0 : _a.trim()) != null ? _b : "";
     const filePath = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
-
     if (this.app.vault.getAbstractFileByPath(filePath)) {
-      new obsidian.Notice(`A file named "${title}" already exists at that location.`);
+      new import_obsidian14.Notice(`A file named "${title}" already exists at that location.`);
       return;
     }
-
-    // Read template
-    let content = '';
+    let content = "";
     if (objType.templatePath) {
       const tplFile = this.app.vault.getAbstractFileByPath(objType.templatePath);
-      if (tplFile instanceof obsidian.TFile) {
+      if (tplFile instanceof import_obsidian14.TFile) {
         content = await this.app.vault.read(tplFile);
       } else {
-        new obsidian.Notice(`Template not found: ${objType.templatePath}`);
+        new import_obsidian14.Notice(`Template not found: ${objType.templatePath}`);
       }
     }
-
-    // Standard template variable substitution
     const now = new Date();
-    content = content
-      .replace(/\{\{title\}\}/gi, title)
-      .replace(/\{\{date\}\}/gi, now.toISOString().split('T')[0])
-      .replace(/\{\{time\}\}/gi, now.toTimeString().split(' ')[0]);
-
-    // Inject user-provided field values into frontmatter
+    content = content.replace(/\{\{title\}\}/gi, title).replace(/\{\{date\}\}/gi, now.toISOString().split("T")[0]).replace(/\{\{time\}\}/gi, now.toTimeString().split(" ")[0]);
     content = this.injectFieldsIntoContent(content, objType, fieldValues);
-
-    // Append description to body if provided
     if (description.trim()) {
       content = this.appendDescriptionToContent(content, description.trim());
     }
-
-    // Ensure save folder exists
     if (saveFolder && !this.app.vault.getAbstractFileByPath(saveFolder)) {
-      try { await this.app.vault.createFolder(saveFolder); } catch { /* race: already exists */ }
+      try {
+        await this.app.vault.createFolder(saveFolder);
+      } catch (e) {
+      }
     }
-
     try {
       const newFile = await this.app.vault.create(filePath, content);
       await this.app.workspace.getLeaf(false).openFile(newFile);
-      new obsidian.Notice(`Created: ${title}`);
+      new import_obsidian14.Notice(`Created: ${title}`);
     } catch (err) {
-      new obsidian.Notice(`Failed to create file: ${err.message}`);
+      new import_obsidian14.Notice(`Failed to create file: ${err.message}`);
     }
   }
-
-  /**
-   * Injects user-provided field values into the content's YAML frontmatter.
-   * If the key already exists in the template's frontmatter the values are
-   * merged rather than duplicated, so tags/lists accumulate correctly.
-   */
   injectFieldsIntoContent(content, objType, fieldValues) {
-    const fields = (objType.fields ?? []).filter((f) => f.key?.trim());
-    if (fields.length === 0) return content;
-
+    var _a, _b;
+    const fields = ((_a = objType.fields) != null ? _a : []).filter((f) => {
+      var _a2;
+      return (_a2 = f.key) == null ? void 0 : _a2.trim();
+    });
+    if (fields.length === 0)
+      return content;
     for (const field of fields) {
-      const raw = (fieldValues[field.key] ?? '').trim();
-      if (!raw) continue;
-      if (field.type === 'list') {
-        const items = raw.split(',').map((s) => s.trim()).filter(Boolean);
+      const raw = ((_b = fieldValues[field.key]) != null ? _b : "").trim();
+      if (!raw)
+        continue;
+      if (field.type === "list") {
+        const items = raw.split(",").map((s) => s.trim()).filter(Boolean);
         content = this.upsertListInFrontmatter(content, field.key, items);
       } else {
         content = this.upsertTextInFrontmatter(content, field.key, raw);
@@ -3252,206 +2746,190 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
     }
     return content;
   }
-
-  /**
-   * Appends description text to the body of the content.
-   *
-   * Rules:
-   *  - If the content has frontmatter and a non-empty body after it:
-   *    append the description after the existing body content.
-   *  - If the content has frontmatter but no body (or only whitespace):
-   *    insert the description immediately after the closing `---`.
-   *  - If there is no frontmatter:
-   *    append to any existing text, or use the description as the full content.
-   */
   appendDescriptionToContent(content, description) {
-    // Match frontmatter block: opening ---, any content, closing ---
     const fmMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---[ \t]*(\r?\n|$)/);
     if (fmMatch) {
       const fmEnd = fmMatch.index + fmMatch[0].length;
       const body = content.slice(fmEnd);
       if (body.trim()) {
-        // Template has body content — append description after it
-        return content.trimEnd() + '\n\n' + description + '\n';
+        return content.trimEnd() + "\n\n" + description + "\n";
       } else {
-        // No body content — place description right below the frontmatter
-        return content.slice(0, fmEnd) + '\n' + description + '\n';
+        return content.slice(0, fmEnd) + "\n" + description + "\n";
       }
     } else {
-      // No frontmatter
-      if (content.trim()) {
-        return content.trimEnd() + '\n\n' + description + '\n';
-      } else {
-        return description + '\n';
-      }
+      return content.trim() ? content.trimEnd() + "\n\n" + description + "\n" : description + "\n";
     }
   }
-
-  /**
-   * Build a regex that matches a frontmatter key and ALL of its value lines —
-   * whether inline `key: [a, b]`, plain scalar `key: value`, empty `key:`,
-   * or a block list `key:\n  - a\n  - b`.
-   * Handles both LF and CRLF line endings.
-   */
   keyBlockRegex(esc) {
-    // Matches the key line (anything up to but not including \n),
-    // then greedily captures every following line that starts with two spaces.
-    return new RegExp(`^${esc}:[^\\n]*((?:\\r?\\n  - [^\\r\\n]*)*)`, 'm');
+    return new RegExp(`^${esc}:[^\\n]*((?:\\r?\\n  - [^\\r\\n]*)*)`, "m");
   }
-
-  /** Add `newItems` to a list key, merging with any existing values. */
   upsertListInFrontmatter(content, key, newItems) {
-    if (!newItems.length) return content;
+    if (!newItems.length)
+      return content;
     content = this.ensureFrontmatter(content);
-    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Wikilinks like [[Page]] contain [[ ]] which YAML misparses as nested flow
-    // sequences. Quote them so YAML treats them as plain strings.
+    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const yamlItem = (i) => /^\[\[.*\]\]$/.test(i) ? `"${i}"` : i;
-
-    // Inline array:  key: [a, b]  — handle separately as it needs different merge logic
-    const inlineRe = new RegExp(`(^${esc}:\\s*\\[)([^\\]]*)(\\])`, 'm');
+    const inlineRe = new RegExp(`(^${esc}:\\s*\\[)([^\\]]*)(\\])`, "m");
     if (inlineRe.test(content)) {
       return content.replace(inlineRe, (_, open, body, close) => {
-        const existing = body.split(',').map((s) => s.trim()).filter(Boolean);
-        const merged = [...new Set([...existing, ...newItems])];
-        return `${open}${merged.map(yamlItem).join(', ')}${close}`;
+        const existing = body.split(",").map((s) => s.trim()).filter(Boolean);
+        const merged = [.../* @__PURE__ */ new Set([...existing, ...newItems])];
+        return `${open}${merged.map(yamlItem).join(", ")}${close}`;
       });
     }
-
-    // Block list, plain scalar, or empty key — use the unified key-block regex
-    // so the entire key + any orphan-prone sub-lines are replaced atomically.
     const blockRe = this.keyBlockRegex(esc);
     const m = content.match(blockRe);
     if (m) {
-      const blockPart = m[1]; // the "\n  - item" section (may be empty string)
+      const blockPart = m[1];
       let existing = [];
       if (blockPart.trim()) {
         existing = [...blockPart.matchAll(/- ([^\r\n]+)/g)].map((x) => x[1].trim());
       } else {
-        // Plain scalar: grab the value after "key: "
-        const scalarVal = m[0].replace(new RegExp(`^${esc}:\\s*`), '').trim();
-        if (scalarVal) existing = [scalarVal];
+        const scalarVal = m[0].replace(new RegExp(`^${esc}:\\s*`), "").trim();
+        if (scalarVal)
+          existing = [scalarVal];
       }
-      const merged = [...new Set([...existing, ...newItems])];
-      const replacement = `${key}:\n` + merged.map((i) => `  - ${yamlItem(i)}`).join('\n');
+      const merged = [.../* @__PURE__ */ new Set([...existing, ...newItems])];
+      const replacement = `${key}:
+` + merged.map((i) => `  - ${yamlItem(i)}`).join("\n");
       return content.replace(blockRe, replacement);
     }
-
-    // Key absent — inject as inline list
-    return content.replace(/^(---\r?\n)/, `$1${key}: [${newItems.map(yamlItem).join(', ')}]\n`);
+    return content.replace(/^(---\r?\n)/, `$1${key}: [${newItems.map(yamlItem).join(", ")}]
+`);
   }
-
-  /** Set a text key, replacing any existing value (and any orphan block lines). */
   upsertTextInFrontmatter(content, key, value) {
     content = this.ensureFrontmatter(content);
-    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Wikilinks contain [[ ]] which YAML would misparse as nested flow sequences.
-    // Wrap them in double-quotes so YAML treats them as plain strings.
+    const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const yamlValue = /^\[\[.*\]\]$/.test(value) ? `"${value}"` : value;
-    // Use the unified key-block regex so block-list sub-lines are replaced too
     const blockRe = this.keyBlockRegex(esc);
     if (blockRe.test(content)) {
       return content.replace(blockRe, `${key}: ${yamlValue}`);
     }
-    return content.replace(/^(---\r?\n)/, `$1${key}: ${yamlValue}\n`);
+    return content.replace(/^(---\r?\n)/, `$1${key}: ${yamlValue}
+`);
   }
-
-  /** If there's no frontmatter block yet, prepend an empty one. */
   ensureFrontmatter(content) {
-    if (/^---\r?\n/.test(content)) return content;
-    return `---\n---\n\n${content}`;
-  }
+    if (/^---\r?\n/.test(content))
+      return content;
+    return `---
+---
 
+${content}`;
+  }
   // ── Template helpers ──────────────────────────────────────────────────────────
-
   getTemplatesFolder() {
-    if (this.settings.templatesFolder) return this.settings.templatesFolder;
+    var _a, _b, _c, _d, _e;
+    if (this.settings.templatesFolder)
+      return this.settings.templatesFolder;
     try {
-      const core = this.app.internalPlugins?.plugins?.['templates'];
-      if (core?.enabled) return core.instance?.options?.folder ?? '';
-    } catch { /* ignore */ }
-    return '';
+      const core = (_b = (_a = this.app.internalPlugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b["templates"];
+      if (core == null ? void 0 : core.enabled)
+        return (_e = (_d = (_c = core.instance) == null ? void 0 : _c.options) == null ? void 0 : _d.folder) != null ? _e : "";
+    } catch (e) {
+    }
+    return "";
   }
-
   getTemplateFiles() {
     const folder = this.getTemplatesFolder();
     const allMd = this.app.vault.getMarkdownFiles();
-    if (!folder) return allMd;
-    const prefix = folder.endsWith('/') ? folder : folder + '/';
+    if (!folder)
+      return allMd;
+    const prefix = folder.endsWith("/") ? folder : folder + "/";
     return allMd.filter((f) => f.path.startsWith(prefix));
   }
-
   // ── Persistence ───────────────────────────────────────────────────────────────
-
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-    if (!this.settings.objectTypes) this.settings.objectTypes = [];
-    if (this.settings.templatesFolder === undefined) this.settings.templatesFolder = '';
-    if (this.settings.triggerKey === undefined) this.settings.triggerKey = '';
-
-    // Filtered Files Widget — initialise and validate
-    if (!Array.isArray(this.settings.ffwSections)) this.settings.ffwSections = [];
-    if (this.settings.ffwDisplayNameKey === undefined) this.settings.ffwDisplayNameKey = '';
-    // Strip any malformed section objects that would cause render errors
-    this.settings.ffwSections = this.settings.ffwSections.filter((s) =>
-      s && typeof s === 'object' &&
-      typeof s.id === 'string' && typeof s.title === 'string' &&
-      Array.isArray(s.filters) && !!s.sort
+    if (!this.settings.objectTypes)
+      this.settings.objectTypes = [];
+    if (this.settings.templatesFolder === void 0)
+      this.settings.templatesFolder = "";
+    if (this.settings.triggerKey === void 0)
+      this.settings.triggerKey = "";
+    if (!Array.isArray(this.settings.ffwSections))
+      this.settings.ffwSections = [];
+    if (this.settings.ffwDisplayNameKey === void 0)
+      this.settings.ffwDisplayNameKey = "";
+    this.settings.ffwSections = this.settings.ffwSections.filter(
+      (s) => s && typeof s === "object" && typeof s.id === "string" && typeof s.title === "string" && Array.isArray(s.filters) && !!s.sort
     );
-
-    // Build the set of slugs already assigned so we can guarantee uniqueness
     const takenSlugs = new Set(
       this.settings.objectTypes.filter((o) => o.commandSlug).map((o) => o.commandSlug)
     );
-
     let needsSave = false;
     for (const obj of this.settings.objectTypes) {
-      if (!obj.fields)                          { obj.fields = [];        needsSave = true; }
-      if (!obj.matchFilters)                    { obj.matchFilters = [];  needsSave = true; }
-      if (!obj.matchMode)                       { obj.matchMode = 'all';  needsSave = true; }
-      if (obj.enableFindCommand === undefined)  { obj.enableFindCommand = false; needsSave = true; }
-      if (obj.showInTriggerMenu === undefined)  { obj.showInTriggerMenu = false; needsSave = true; }
-      if (obj.styledLinks === undefined)        { obj.styledLinks = false; needsSave = true; }
-      if (!obj.previewFields)                    { obj.previewFields = [];        needsSave = true; }
-      if (!obj.canvasFields)                     { obj.canvasFields = [];         needsSave = true; }
-      if (!obj.imageKey)                         { obj.imageKey = '';             needsSave = true; }
-      if (obj.showImageInPreview === undefined)  { obj.showImageInPreview = false; needsSave = true; }
-      if (obj.showImageInCanvas  === undefined)  { obj.showImageInCanvas  = false; needsSave = true; }
-
-      // Assign a stable commandSlug the first time (derived from the name, unique).
-      // This slug never changes after creation — renames only update the display name.
+      if (!obj.fields) {
+        obj.fields = [];
+        needsSave = true;
+      }
+      if (!obj.matchFilters) {
+        obj.matchFilters = [];
+        needsSave = true;
+      }
+      if (!obj.matchMode) {
+        obj.matchMode = "all";
+        needsSave = true;
+      }
+      if (obj.enableFindCommand === void 0) {
+        obj.enableFindCommand = false;
+        needsSave = true;
+      }
+      if (obj.showInTriggerMenu === void 0) {
+        obj.showInTriggerMenu = false;
+        needsSave = true;
+      }
+      if (obj.styledLinks === void 0) {
+        obj.styledLinks = false;
+        needsSave = true;
+      }
+      if (!obj.previewFields) {
+        obj.previewFields = [];
+        needsSave = true;
+      }
+      if (!obj.canvasFields) {
+        obj.canvasFields = [];
+        needsSave = true;
+      }
+      if (!obj.imageKey) {
+        obj.imageKey = "";
+        needsSave = true;
+      }
+      if (obj.showImageInPreview === void 0) {
+        obj.showImageInPreview = false;
+        needsSave = true;
+      }
+      if (obj.showImageInCanvas === void 0) {
+        obj.showImageInCanvas = false;
+        needsSave = true;
+      }
       if (!obj.commandSlug) {
         const base = nameToCommandSlug(obj.name);
         let slug = base;
         let n = 2;
-        while (takenSlugs.has(slug)) slug = `${base}-${n++}`;
+        while (takenSlugs.has(slug))
+          slug = `${base}-${n++}`;
         obj.commandSlug = slug;
         takenSlugs.add(slug);
         needsSave = true;
       }
     }
-
-    if (needsSave) await this.saveSettings();
+    if (needsSave)
+      await this.saveSettings();
   }
-
-  async saveSettings() { await this.saveData(this.settings); }
-
+  async saveSettings() {
+    await this.saveData(this.settings);
+  }
   // ── Object link styling ───────────────────────────────────────────────────────
-
-  /**
-   * Rebuild the sets of file basenames / paths whose object type has
-   * `styledLinks` enabled.  Called on load, on metadata resolve, and whenever
-   * the styledLinks toggle changes.
-   */
   buildStyledObjectSet() {
-    this.styledObjectBasenames  = new Set();
-    this.styledObjectPaths      = new Set();
-    this.previewObjectBasenames = new Set();
-    this.previewObjectPaths     = new Set();
+    var _a;
+    this.styledObjectBasenames = /* @__PURE__ */ new Set();
+    this.styledObjectPaths = /* @__PURE__ */ new Set();
+    this.previewObjectBasenames = /* @__PURE__ */ new Set();
+    this.previewObjectPaths = /* @__PURE__ */ new Set();
     for (const objType of this.settings.objectTypes) {
-      const hasPreview = (objType.previewFields ?? []).length > 0;
-      if (!objType.styledLinks && !hasPreview) continue;
+      const hasPreview = ((_a = objType.previewFields) != null ? _a : []).length > 0;
+      if (!objType.styledLinks && !hasPreview)
+        continue;
       for (const file of this.getObjectTypeFiles(objType)) {
         if (objType.styledLinks) {
           this.styledObjectBasenames.add(file.basename);
@@ -3464,23 +2942,16 @@ class FilteredFileCommandsPlugin extends obsidian.Plugin {
       }
     }
   }
-
-  /**
-   * Walk any already-rendered internal links in the DOM (reading view) and
-   * add or remove the `ffc-obj-link` class to match the current object set.
-   * CM6 (live preview) picks up the new set automatically on the next update.
-   */
   refreshObjectLinkStyles() {
-    document.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
-      const href      = link.getAttribute('data-href').split('#')[0].trim();
-      const basename  = href.includes('/') ? href.split('/').pop() : href;
-      const isStyled  = this.styledObjectBasenames.has(href)  || this.styledObjectBasenames.has(basename);
-      const isPreview = this.previewObjectBasenames.has(href)  || this.previewObjectBasenames.has(basename);
-      link.classList.toggle('ffc-obj-link',         isStyled);
-      link.classList.toggle('ffc-obj-preview-link', isPreview);
+    document.querySelectorAll("a.internal-link[data-href]").forEach((link) => {
+      var _a, _b;
+      const href = ((_a = link.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
+      const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
+      const isStyled = this.styledObjectBasenames.has(href) || this.styledObjectBasenames.has(basename);
+      const isPreview = this.previewObjectBasenames.has(href) || this.previewObjectBasenames.has(basename);
+      link.classList.toggle("ffc-obj-link", isStyled);
+      link.classList.toggle("ffc-obj-preview-link", isPreview);
     });
   }
-
-}
-
-module.exports = FilteredFileCommandsPlugin;
+};
+var main_default = FilteredFileCommandsPlugin;

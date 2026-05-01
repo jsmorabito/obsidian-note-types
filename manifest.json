@@ -1,10 +1,10 @@
 {
   "id": "filtered-file-commands",
   "name": "Objects",
-  "version": "1.4.3",
+  "version": "1.5.0",
   "minAppVersion": "0.15.0",
-  "description": "Define custom commands that open a fuzzy file picker filtered by frontmatter properties.",
-  "author": "John",
-  "authorUrl": "",
+  "description": "Define object types with creation commands, filtered file pickers, hover previews, styled wikilinks, and a sidebar widget.",
+  "author": "John Morabito",
+  "authorUrl": "https://github.com/jsmorabito",
   "isDesktopOnly": false
 }
