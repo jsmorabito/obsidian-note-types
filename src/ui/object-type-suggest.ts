@@ -1,15 +1,32 @@
 import { App, EditorSuggest, EditorSuggestContext, EditorSuggestTriggerInfo, Editor, TFile } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
+import type { TriggerProvider, TriggerItem } from '../trigger-registry.ts';
 
-interface SuggestionItem {
+// ── Suggestion item types ──────────────────────────────────────────────────────
+
+interface ObjectSuggestionItem {
+  kind: 'object';
   file: TFile;
   title: string;
 }
 
+interface ProviderSuggestionItem {
+  kind: 'provider';
+  provider: TriggerProvider;
+  item: TriggerItem;
+}
+
+type SuggestionItem = ObjectSuggestionItem | ProviderSuggestionItem;
+
+// ── Suggest class ──────────────────────────────────────────────────────────────
+
 /**
  * Watches the editor for the user-configured trigger key (e.g. "@") and opens
- * a fuzzy suggestion menu populated by all files that match any object type's
- * match filters. Selecting an item inserts a [[wikilink]] at the cursor.
+ * a fuzzy suggestion menu populated by:
+ *   1. All files that match any object type's match filters.
+ *   2. Items from any registered TriggerProviders (e.g. obsidian-time-tools).
+ *
+ * Selecting an item inserts a [[wikilink]] or delegates to the provider.
  */
 export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
   private plugin: FilteredFileCommandsPlugin;
@@ -42,20 +59,32 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
 
   getSuggestions(context: EditorSuggestContext): SuggestionItem[] {
     const query = context.query.toLowerCase();
-    const files = this._getMatchingFiles();
-    return files
+
+    // ── Object-type items (existing behaviour) ─────────────────────────────────
+    const objectItems: ObjectSuggestionItem[] = this._getMatchingFiles()
       .map((file) => {
         const cache = this.app.metadataCache.getFileCache(file);
-        const title = cache?.frontmatter?.['title'] ? String(cache.frontmatter['title']) : file.basename;
-        return { file, title };
+        const title = cache?.frontmatter?.['title']
+          ? String(cache.frontmatter['title'])
+          : file.basename;
+        return { kind: 'object' as const, file, title };
       })
       .filter(({ title }) => title.toLowerCase().includes(query))
       .sort((a, b) => {
         const aStarts = a.title.toLowerCase().startsWith(query) ? 0 : 1;
         const bStarts = b.title.toLowerCase().startsWith(query) ? 0 : 1;
         return aStarts - bStarts || a.title.localeCompare(b.title);
-      })
-      .slice(0, 30);
+      });
+
+    // ── Provider items ─────────────────────────────────────────────────────────
+    const providerItems: ProviderSuggestionItem[] = [];
+    for (const provider of this.plugin.triggerProviders.values()) {
+      for (const item of provider.getItems(query)) {
+        providerItems.push({ kind: 'provider', provider, item });
+      }
+    }
+
+    return [...objectItems, ...providerItems].slice(0, 30);
   }
 
   private _getMatchingFiles(): TFile[] {
@@ -73,17 +102,43 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
     return result;
   }
 
-  renderSuggestion({ file, title }: SuggestionItem, el: HTMLElement): void {
-    el.createEl('span', { text: title, cls: 'suggestion-title' });
-    const folder = file.parent?.path;
+  renderSuggestion(suggestion: SuggestionItem, el: HTMLElement): void {
+    if (suggestion.kind === 'provider') {
+      if (suggestion.provider.renderItem) {
+        suggestion.provider.renderItem(suggestion.item, el);
+      } else {
+        el.createEl('span', { text: suggestion.item.title, cls: 'suggestion-title' });
+        if (suggestion.item.subtitle) {
+          el.createEl('span', { text: suggestion.item.subtitle, cls: 'suggestion-note' });
+        }
+      }
+      return;
+    }
+
+    // Object-type item (existing behaviour)
+    el.createEl('span', { text: suggestion.title, cls: 'suggestion-title' });
+    const folder = suggestion.file.parent?.path;
     if (folder && folder !== '/') {
       el.createEl('span', { text: folder, cls: 'suggestion-note' });
     }
   }
 
-  selectSuggestion({ file, title }: SuggestionItem): void {
+  selectSuggestion(suggestion: SuggestionItem): void {
     const context = this.context;
     if (!context) return;
+
+    if (suggestion.kind === 'provider') {
+      suggestion.provider.selectItem(
+        suggestion.item,
+        context.editor,
+        context.start,
+        context.end,
+      );
+      return;
+    }
+
+    // Object-type item (existing behaviour)
+    const { file, title } = suggestion;
     const link = title !== file.basename
       ? `[[${file.basename}|${title}]]`
       : `[[${file.basename}]]`;

@@ -1364,17 +1364,23 @@ var ObjectTypeSuggest = class extends import_obsidian10.EditorSuggest {
   }
   getSuggestions(context) {
     const query = context.query.toLowerCase();
-    const files = this._getMatchingFiles();
-    return files.map((file) => {
+    const objectItems = this._getMatchingFiles().map((file) => {
       var _a;
       const cache = this.app.metadataCache.getFileCache(file);
       const title = ((_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a["title"]) ? String(cache.frontmatter["title"]) : file.basename;
-      return { file, title };
+      return { kind: "object", file, title };
     }).filter(({ title }) => title.toLowerCase().includes(query)).sort((a, b) => {
       const aStarts = a.title.toLowerCase().startsWith(query) ? 0 : 1;
       const bStarts = b.title.toLowerCase().startsWith(query) ? 0 : 1;
       return aStarts - bStarts || a.title.localeCompare(b.title);
-    }).slice(0, 30);
+    });
+    const providerItems = [];
+    for (const provider of this.plugin.triggerProviders.values()) {
+      for (const item of provider.getItems(query)) {
+        providerItems.push({ kind: "provider", provider, item });
+      }
+    }
+    return [...objectItems, ...providerItems].slice(0, 30);
   }
   _getMatchingFiles() {
     const seen = /* @__PURE__ */ new Set();
@@ -1391,18 +1397,39 @@ var ObjectTypeSuggest = class extends import_obsidian10.EditorSuggest {
     }
     return result;
   }
-  renderSuggestion({ file, title }, el) {
+  renderSuggestion(suggestion, el) {
     var _a;
-    el.createEl("span", { text: title, cls: "suggestion-title" });
-    const folder = (_a = file.parent) == null ? void 0 : _a.path;
+    if (suggestion.kind === "provider") {
+      if (suggestion.provider.renderItem) {
+        suggestion.provider.renderItem(suggestion.item, el);
+      } else {
+        el.createEl("span", { text: suggestion.item.title, cls: "suggestion-title" });
+        if (suggestion.item.subtitle) {
+          el.createEl("span", { text: suggestion.item.subtitle, cls: "suggestion-note" });
+        }
+      }
+      return;
+    }
+    el.createEl("span", { text: suggestion.title, cls: "suggestion-title" });
+    const folder = (_a = suggestion.file.parent) == null ? void 0 : _a.path;
     if (folder && folder !== "/") {
       el.createEl("span", { text: folder, cls: "suggestion-note" });
     }
   }
-  selectSuggestion({ file, title }) {
+  selectSuggestion(suggestion) {
     const context = this.context;
     if (!context)
       return;
+    if (suggestion.kind === "provider") {
+      suggestion.provider.selectItem(
+        suggestion.item,
+        context.editor,
+        context.start,
+        context.end
+      );
+      return;
+    }
+    const { file, title } = suggestion;
     const link = title !== file.basename ? `[[${file.basename}|${title}]]` : `[[${file.basename}]]`;
     context.editor.replaceRange(link, context.start, context.end);
   }
@@ -2323,6 +2350,19 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     this.styledObjectPaths = /* @__PURE__ */ new Set();
     this.previewObjectBasenames = /* @__PURE__ */ new Set();
     this.previewObjectPaths = /* @__PURE__ */ new Set();
+    // ── Trigger provider registry ─────────────────────────────────────────────────
+    /**
+     * External plugins can contribute items to the @ trigger menu by calling
+     * registerTriggerProvider(). They should call unregisterTriggerProvider()
+     * in their own onunload() to avoid holding a dead reference.
+     */
+    this.triggerProviders = /* @__PURE__ */ new Map();
+  }
+  registerTriggerProvider(provider) {
+    this.triggerProviders.set(provider.id, provider);
+  }
+  unregisterTriggerProvider(id) {
+    this.triggerProviders.delete(id);
   }
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
   async onload() {

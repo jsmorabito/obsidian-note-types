@@ -11,6 +11,7 @@ import { ObjectPreviewPopup } from './ui/object-preview-popup.ts';
 import { CanvasObjectSwitcher, ObsidianCanvas } from './ui/canvas-object-switcher.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildObjectLinkViewPlugin } from './views/object-link-view-plugin.ts';
+import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
 type CommandRef = { name: string };
@@ -26,6 +27,23 @@ export class FilteredFileCommandsPlugin extends Plugin {
   previewObjectPaths:     Set<string> = new Set();
 
   private previewPopup!: ObjectPreviewPopup;
+
+  // ── Trigger provider registry ─────────────────────────────────────────────────
+
+  /**
+   * External plugins can contribute items to the @ trigger menu by calling
+   * registerTriggerProvider(). They should call unregisterTriggerProvider()
+   * in their own onunload() to avoid holding a dead reference.
+   */
+  readonly triggerProviders: Map<string, TriggerProvider> = new Map();
+
+  registerTriggerProvider(provider: TriggerProvider): void {
+    this.triggerProviders.set(provider.id, provider);
+  }
+
+  unregisterTriggerProvider(id: string): void {
+    this.triggerProviders.delete(id);
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
