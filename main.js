@@ -1161,8 +1161,530 @@ function ffwSortFiles(files, app, sort) {
         return String(va).localeCompare(String(vb), void 0, { sensitivity: "base" }) * dir;
       });
     }
+<<<<<<< Updated upstream
     default:
       return arr;
+=======
+
+    // ── Object Detection ──────────────────────────────────────────────────────
+    const detectionSection = block.createDiv({ cls: 'ffc-filters-section' });
+    detectionSection.createEl('p', { text: 'Object Detection', cls: 'ffc-filters-title' });
+    detectionSection.createEl('p', {
+      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "Find" command. If no filters are set, files in the Save Folder are used as a fallback.',
+      cls: 'ffc-hint',
+    });
+
+    new obsidian.Setting(detectionSection)
+      .setName('Filter match mode')
+      .setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
+      .addDropdown((dd) =>
+        dd
+          .addOption('all', 'Match ALL (AND)')
+          .addOption('any', 'Match ANY (OR)')
+          .setValue(obj.matchMode ?? 'all')
+          .onChange(async (value) => { obj.matchMode = value; await this.plugin.saveSettings(); })
+      );
+
+    if (!obj.matchFilters || obj.matchFilters.length === 0) {
+      detectionSection.createEl('p', { text: 'No filters — save folder will be used as a fallback.', cls: 'ffc-hint' });
+    }
+    for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
+      this.renderObjectMatchFilter(detectionSection, index, fi);
+    }
+    new obsidian.Setting(detectionSection).addButton((btn) =>
+      btn.setButtonText('＋ Add Detection Filter').onClick(async () => {
+        if (!obj.matchFilters) obj.matchFilters = [];
+        obj.matchFilters.push({ key: '', operator: 'equals', value: '' });
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+
+    new obsidian.Setting(detectionSection)
+      .setName('Show in trigger menu')
+      .setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || '@'}" inline trigger menu.`)
+      .addToggle((toggle) =>
+        toggle.setValue(obj.showInTriggerMenu ?? false)
+          .onChange(async (value) => { obj.showInTriggerMenu = value; await this.plugin.saveSettings(); })
+      );
+
+    new obsidian.Setting(detectionSection)
+      .setName('Enable "Find" command')
+      .setDesc(`When enabled, adds a "Find ${obj.name}" command to the palette for fuzzy-searching files of this type.`)
+      .addToggle((toggle) =>
+        toggle.setValue(obj.enableFindCommand ?? false)
+          .onChange(async (value) => {
+            obj.enableFindCommand = value;
+            await this.plugin.saveSettings();
+            if (value) this.plugin.registerFindCommand(obj);
+          })
+      );
+
+    new obsidian.Setting(detectionSection)
+      .setName('Style object links')
+      .setDesc('When enabled, inline links to files of this type will have their underline removed and a background fill applied (using tag style variables).')
+      .addToggle((toggle) =>
+        toggle.setValue(obj.styledLinks ?? false)
+          .onChange(async (value) => {
+            obj.styledLinks = value;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledObjectSet();
+            this.plugin.refreshObjectLinkStyles();
+          })
+      );
+
+    // Template picker
+    const templateFiles = this.plugin.getTemplateFiles();
+    if (templateFiles.length > 0) {
+      new obsidian.Setting(block).setName('Template').setDesc('Template file applied when creating a new object of this type.')
+        .addDropdown((dd) => {
+          dd.addOption('', '— None —');
+          for (const f of templateFiles) dd.addOption(f.path, f.basename);
+          dd.setValue(obj.templatePath || '');
+          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); });
+        });
+    } else {
+      new obsidian.Setting(block).setName('Template').setDesc('No templates found. Set the templates folder above, or check it contains .md files.')
+        .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
+          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); })
+        );
+    }
+
+    // Save folder
+    new obsidian.Setting(block).setName('Save folder').setDesc('Where new files are created (e.g. "Projects/Tasks"). Leave blank for vault root.')
+      .addText((text) => text.setPlaceholder('e.g. Projects/Tasks').setValue(obj.saveFolder || '')
+        .onChange(async (value) => { obj.saveFolder = value.trim(); await this.plugin.saveSettings(); })
+      );
+
+    // ── Creation Fields ───────────────────────────────────────────────────────
+    const fieldsSection = block.createDiv({ cls: 'ffc-filters-section' });
+    fieldsSection.createEl('p', { text: 'Creation Fields', cls: 'ffc-filters-title' });
+    fieldsSection.createEl('p', {
+      text: 'Fields shown in the creation dialog. Values are written into the new file\'s frontmatter.',
+      cls: 'ffc-hint',
+    });
+
+    for (let fi = 0; fi < (obj.fields ?? []).length; fi++) {
+      this.renderObjectField(fieldsSection, index, fi);
+    }
+
+    new obsidian.Setting(fieldsSection).addButton((btn) =>
+      btn.setButtonText('＋ Add Field').onClick(async () => {
+        if (!obj.fields) obj.fields = [];
+        obj.fields.push({ key: '', label: '', type: 'text' });
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+
+    // ── Preview Fields ────────────────────────────────────────────────────────
+    const previewSection = block.createDiv({ cls: 'ffc-filters-section' });
+    previewSection.createEl('p', { text: 'Preview Fields', cls: 'ffc-filters-title' });
+    previewSection.createEl('p', {
+      text: 'Frontmatter keys shown when hovering over a link to an object of this type. The title is always shown; these fields appear below it.',
+      cls: 'ffc-hint',
+    });
+
+    for (let fi = 0; fi < (obj.previewFields ?? []).length; fi++) {
+      this.renderPreviewField(previewSection, index, fi);
+    }
+
+    new obsidian.Setting(previewSection).addButton((btn) =>
+      btn.setButtonText('＋ Add Preview Field').onClick(async () => {
+        if (!obj.previewFields) obj.previewFields = [];
+        obj.previewFields.push({ key: '', label: '' });
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+
+    new obsidian.Setting(previewSection)
+      .setName('Show cover image in preview')
+      .setDesc('Show the image from the Image Key at the top of the hover card. Configure the key in the object type\'s full settings.')
+      .addToggle((toggle) =>
+        toggle.setValue(obj.showImageInPreview ?? false)
+          .onChange(async (value) => { obj.showImageInPreview = value; await this.plugin.saveSettings(); })
+      );
+  }
+
+  renderObjectMatchFilter(container, objIndex, filterIndex) {
+    const obj = this.plugin.settings.objectTypes[objIndex];
+    const filter = obj.matchFilters[filterIndex];
+    const row = container.createDiv({ cls: 'ffc-filter-row' });
+
+    const isPathOp = filter.operator === 'in_folder' || filter.operator === 'not_in_folder';
+
+    // Key input — hidden for path-based operators (path is the implicit "key")
+    if (!isPathOp) {
+      const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
+      keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key ?? '';
+      keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
+    }
+
+    const opSelect = row.createEl('select', { cls: 'ffc-select' });
+    for (const op of [
+      { value: 'equals',       label: '=' },
+      { value: 'not_equals',   label: '≠' },
+      { value: 'contains',     label: 'contains' },
+      { value: 'exists',       label: 'exists' },
+      { value: 'in_folder',    label: 'in folder' },
+      { value: 'not_in_folder',label: 'not in folder' },
+    ]) {
+      const opt = opSelect.createEl('option', { text: op.label, value: op.value });
+      if (filter.operator === op.value) opt.selected = true;
+    }
+    opSelect.addEventListener('change', async () => { filter.operator = opSelect.value; await this.plugin.saveSettings(); this.display(); });
+
+    const needsValue = filter.operator !== 'exists';
+    if (needsValue) {
+      const valInput = row.createEl('input', { cls: 'ffc-input ffc-input-val' });
+      valInput.type = 'text';
+      valInput.placeholder = isPathOp ? 'Folder path (e.g. Templates)' : 'Value';
+      valInput.value = filter.value ?? '';
+      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
+    }
+
+    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+      obj.matchFilters.splice(filterIndex, 1);
+      await this.plugin.saveSettings();
+      this.display();
+    };
+  }
+
+  renderObjectField(container, objIndex, fieldIndex) {
+    const obj = this.plugin.settings.objectTypes[objIndex];
+    const field = obj.fields[fieldIndex];
+    const row = container.createDiv({ cls: 'ffc-filter-row' });
+
+    // Label
+    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
+    labelInput.type = 'text'; labelInput.placeholder = 'Label'; labelInput.value = field.label ?? '';
+    labelInput.title = 'Display label shown in the creation dialog';
+    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
+
+    // Key
+    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
+    keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
+    keyInput.title = 'The frontmatter property key written into the new file';
+    keyInput.addEventListener('change', async () => { field.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
+
+    // Type dropdown
+    const typeSelect = row.createEl('select', { cls: 'ffc-select' });
+    for (const t of [{ value: 'text', label: 'Text' }, { value: 'list', label: 'List' }]) {
+      const opt = typeSelect.createEl('option', { text: t.label, value: t.value });
+      if (field.type === t.value) opt.selected = true;
+    }
+    typeSelect.title = 'List splits comma-separated input into a YAML array';
+    typeSelect.addEventListener('change', async () => { field.type = typeSelect.value; await this.plugin.saveSettings(); });
+
+    // Remove
+    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+      obj.fields.splice(fieldIndex, 1);
+      await this.plugin.saveSettings();
+      this.display();
+    };
+  }
+
+  renderPreviewField(container, objIndex, fieldIndex) {
+    const obj   = this.plugin.settings.objectTypes[objIndex];
+    const field = obj.previewFields[fieldIndex];
+    const row   = container.createDiv({ cls: 'ffc-filter-row' });
+
+    // Display label (optional — falls back to key if blank)
+    const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
+    labelInput.type        = 'text';
+    labelInput.placeholder = 'Display label';
+    labelInput.value       = field.label ?? '';
+    labelInput.title       = 'Label shown in the preview card (leave blank to use the key name)';
+    labelInput.addEventListener('change', async () => {
+      field.label = labelInput.value;
+      await this.plugin.saveSettings();
+    });
+
+    // Frontmatter key
+    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
+    keyInput.type        = 'text';
+    keyInput.placeholder = 'Frontmatter key';
+    keyInput.value       = field.key ?? '';
+    keyInput.title       = 'The frontmatter property key whose value will appear in the preview';
+    keyInput.addEventListener('change', async () => {
+      field.key = keyInput.value.trim();
+      await this.plugin.saveSettings();
+      this.plugin.buildStyledObjectSet();
+      this.plugin.refreshObjectLinkStyles();
+    });
+
+    // Remove
+    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
+      obj.previewFields.splice(fieldIndex, 1);
+      await this.plugin.saveSettings();
+      this.plugin.buildStyledObjectSet();
+      this.plugin.refreshObjectLinkStyles();
+      this.display();
+    };
+  }
+
+}
+
+// ─── Object Preview Popup ─────────────────────────────────────────────────────
+//
+// Shows a Linear-style hover card when the user hovers over an object link
+// (any link whose target matches an object type that has previewFields set).
+// Works in both reading mode (<a class="internal-link">) and live-preview
+// (CM6 decorated spans).
+
+class ObjectPreviewPopup {
+  constructor(plugin) {
+    this.plugin       = plugin;
+    this.popup        = null;
+    this.hideTimer    = null;
+    this.showTimer    = null;
+    this._currentFile = null;   // file the popup is currently displaying
+
+    this._onMouseOver  = this._handleMouseOver.bind(this);
+    this._onMouseOut   = this._handleMouseOut.bind(this);
+    document.addEventListener('mouseover', this._onMouseOver, true);
+    document.addEventListener('mouseout',  this._onMouseOut,  true);
+  }
+
+  // ── Mouse event handlers ──────────────────────────────────────────────────────
+
+  _handleMouseOver(e) {
+    // Ignore events originating inside the popup itself (e.g. wiki links in preview rows)
+    if (this.popup && this.popup.contains(e.target)) return;
+    const el = e.target;
+    let linkpath = null;
+
+    // Reading mode: <a class="internal-link" data-href="filename">
+    const anchor = el.matches('a.internal-link[data-href]')
+      ? el
+      : el.closest('a.internal-link[data-href]');
+    if (anchor) {
+      linkpath = anchor.getAttribute('data-href').split('#')[0].trim();
+    }
+
+    // Live-preview mode: <span class="cm-hmd-internal-link">filename</span>
+    // No data-href — the text content IS the link target.
+    if (!linkpath) {
+      const cmSpan = el.classList.contains('cm-hmd-internal-link')
+        ? el
+        : el.closest('.cm-hmd-internal-link');
+      if (cmSpan) {
+        // Strip [[ ]] visible when cursor is on the raw wikilink; drop alias after |
+        linkpath = (cmSpan.textContent ?? '')
+          .replace(/^\[\[/, '').replace(/\]\]$/, '')
+          .split('|')[0].split('#')[0].trim();
+      }
+    }
+
+    if (!linkpath) return;
+
+    // Use Obsidian's resolver — handles short names, paths, and aliases
+    const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, '');
+    if (!file) return;
+
+    const objType = this._getObjectTypeForFile(file);
+    if (!objType) return;
+
+    clearTimeout(this.hideTimer);
+    clearTimeout(this.showTimer);
+    // Popup already open for this exact file — just keep it alive, don't rebuild.
+    if (this.popup && this._currentFile === file) return;
+    const triggerEl = anchor ?? el.closest('.cm-hmd-internal-link') ?? null;
+    this.showTimer = setTimeout(() => {
+      this._showForFile(file, objType, e.clientX, e.clientY, triggerEl);
+    }, 280);
+  }
+
+  _handleMouseOut(e) {
+    clearTimeout(this.showTimer);
+    // Keep popup alive if the mouse moves into the popup itself
+    const toEl = e.relatedTarget;
+    if (this.popup && this.popup.contains(toEl)) return;
+    this.hideTimer = setTimeout(() => this.hide(), 200);
+  }
+
+  // ── Build and position the popup ──────────────────────────────────────────────
+
+  async _showForFile(file, objType, clientX, clientY, triggerEl = null) {
+    const hasFields = (objType.previewFields?.length > 0);
+    const hasImage  = !!(objType.showImageInPreview && objType.imageKey);
+    if (!hasFields && !hasImage) return;
+
+    const app = this.plugin.app;
+
+    // Get frontmatter
+    const fm    = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+    const title = fm.title ? String(fm.title) : file.basename;
+
+    // Tear down any existing popup
+    this.hide();
+
+    const popup = document.createElement('div');
+    popup.className = 'ffc-preview-popup';
+
+    // ── Cover image ───────────────────────────────────────────────────────────
+    if (hasImage) {
+      const rawImg = fm[objType.imageKey];
+      const imgSrc = rawImg ? await this._resolveImageSrc(String(rawImg).trim(), app) : null;
+      if (imgSrc) {
+        const imgEl = popup.createEl('img', { cls: 'ffc-preview-image' });
+        imgEl.src = imgSrc;
+        imgEl.alt = title;
+      }
+    }
+
+    // ── Title row ─────────────────────────────────────────────────────────────
+    const header = popup.createDiv({ cls: 'ffc-preview-header' });
+    header.createEl('span', { text: title, cls: 'ffc-preview-title' });
+
+    popup.createEl('hr', { cls: 'ffc-preview-divider' });
+
+    // ── Frontmatter field rows ────────────────────────────────────────────────
+    const body    = popup.createDiv({ cls: 'ffc-preview-body' });
+    let   hasRows = false;
+    for (const pf of (objType.previewFields ?? [])) {
+      const key   = typeof pf === 'string' ? pf : (pf.key ?? '');
+      const label = (typeof pf === 'string' ? pf : (pf.label || pf.key)) || key;
+      if (!key) continue;
+      const raw = fm[key];
+      if (raw === undefined || raw === null || raw === '') continue;
+
+      // Helper: render a single value string — wiki links become clickable <a> tags
+      const renderValue = (valueEl, str) => {
+        const wikiMatch = String(str).match(/^\[\[(.+?)(?:\|(.+?))?\]\]$/);
+        if (wikiMatch) {
+          const linkPath  = wikiMatch[1];
+          const linkLabel = wikiMatch[2] || wikiMatch[1];
+          const a = valueEl.createEl('a', { text: linkLabel, cls: 'ffc-preview-wikilink internal-link' });
+          a.dataset.href = linkPath;
+          a.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.hide();
+            app.workspace.openLinkText(linkPath, '', false);
+          });
+        } else {
+          valueEl.appendText(String(str));
+        }
+      };
+
+      const row = body.createDiv({ cls: 'ffc-preview-row' });
+      row.createEl('span', { text: label, cls: 'ffc-preview-label' });
+      const valueEl = row.createEl('span', { cls: 'ffc-preview-value' });
+      if (Array.isArray(raw)) {
+        raw.forEach((item, i) => {
+          if (i > 0) valueEl.appendText(', ');
+          renderValue(valueEl, item);
+        });
+      } else {
+        renderValue(valueEl, raw);
+      }
+      hasRows = true;
+    }
+
+    // Nothing to show below the title → still show title-only card
+    if (!hasRows) {
+      body.remove();
+      popup.querySelector('.ffc-preview-divider')?.remove();
+    }
+
+    document.body.appendChild(popup);
+    this.popup        = popup;
+    this._currentFile = file;
+
+    // Keep popup alive while mouse is over it.
+    popup.addEventListener('mouseenter', () => clearTimeout(this.hideTimer));
+    popup.addEventListener('mouseleave', () => {
+      this.hideTimer = setTimeout(() => this.hide(), 200);
+    });
+
+    // Click anywhere on the popup (except on an embedded wikilink, which has
+    // its own handler) → navigate to the previewed file. Listener lives on the
+    // popup element itself — NOT at document level — so clicks on the trigger
+    // link are completely untouched and Obsidian's native link handling runs.
+    popup.addEventListener('click', (e) => {
+      if (e.target.closest('.ffc-preview-wikilink')) return;
+      const fileToOpen = this._currentFile;
+      this.hide();
+      if (fileToOpen) {
+        const newLeaf = e.metaKey || e.ctrlKey ? 'tab' : false;
+        this.plugin.app.workspace.getLeaf(newLeaf).openFile(fileToOpen);
+      }
+    });
+
+    // Positioning: anchor below the trigger element so the popup never
+    // overlaps it (which would intercept mousedown and swallow the click).
+    const margin = 12;
+    const vw     = window.innerWidth;
+    const vh     = window.innerHeight;
+    const pw     = popup.offsetWidth  || 280;
+    const ph     = popup.offsetHeight || 120;
+    let left, top;
+    if (triggerEl) {
+      const r = triggerEl.getBoundingClientRect();
+      left = r.left;
+      top  = r.bottom + 6;
+      // Flip above if too close to bottom
+      if (top + ph > vh - margin) top = r.top - ph - 6;
+      // Shift left if overflowing right edge
+      if (left + pw > vw - margin) left = vw - margin - pw;
+    } else {
+      left = clientX + margin;
+      top  = clientY + margin;
+      if (left + pw > vw - margin) left = clientX - pw - margin;
+      if (top  + ph > vh - margin) top  = clientY - ph - margin;
+    }
+    popup.style.left = `${Math.max(margin, left)}px`;
+    popup.style.top  = `${Math.max(margin, top)}px`;
+  }
+
+  /**
+   * Resolve a raw frontmatter image value to a displayable URL.
+   * Handles:
+   *   - Vault wikilinks: "[[image.jpg]]" or bare "image.jpg" / "folder/image.jpg"
+   *   - External URLs: "https://…"
+   */
+  async _resolveImageSrc(rawValue, app) {
+    if (!rawValue) return null;
+    const v = rawValue.trim();
+    if (!v) return null;
+    // External URL → use as-is
+    if (/^https?:\/\//i.test(v)) return v;
+    // Strip wikilink brackets if present: [[img.jpg]] → img.jpg
+    const linkPath = v.replace(/^\[\[/, '').replace(/\]\]$/, '');
+    // Resolve through Obsidian's link resolver (handles short names, aliases, paths)
+    const imageFile = app.metadataCache.getFirstLinkpathDest(linkPath, '');
+    if (imageFile) return app.vault.getResourcePath(imageFile);
+    return null;
+  }
+
+  _getObjectTypeForFile(file) {
+    for (const objType of this.plugin.settings.objectTypes) {
+      // Show popup if there are preview fields OR the image preview is enabled
+      const hasContent = (objType.previewFields?.length > 0) ||
+                         (objType.showImageInPreview && objType.imageKey);
+      if (!hasContent) continue;
+      const files = this.plugin.getObjectTypeFiles(objType);
+      if (files.some((f) => f.path === file.path)) return objType;
+    }
+    return null;
+  }
+
+  // ── Public ────────────────────────────────────────────────────────────────────
+
+  hide() {
+    if (this.popup) { this.popup.remove(); this.popup = null; }
+    this._currentFile = null;
+  }
+
+  destroy() {
+    this.hide();
+    clearTimeout(this.hideTimer);
+    clearTimeout(this.showTimer);
+    document.removeEventListener('mouseover', this._onMouseOver, true);
+    document.removeEventListener('mouseout',  this._onMouseOut,  true);
+>>>>>>> Stashed changes
   }
 }
 function ffwGetSectionFiles(app, section) {
