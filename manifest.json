@@ -1,7 +1,7 @@
 {
   "id": "filtered-file-commands",
   "name": "Objects",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "minAppVersion": "0.15.0",
   "description": "Define object types with creation commands, filtered file pickers, hover previews, styled wikilinks, and a sidebar widget.",
   "author": "John Morabito",
