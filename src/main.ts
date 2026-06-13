@@ -416,6 +416,30 @@ export class FilteredFileCommandsPlugin extends Plugin {
         ).open();
       },
     });
+
+    this.addCommand({
+      id: 'ffc-new-object-from-selection',
+      name: 'New object from selection',
+      editorCallback: (editor) => {
+        const initialTitle = editor.getSelection().trim();
+        const types = this.settings.objectTypes;
+        if (types.length === 0) {
+          new Notice('No object types defined. Add one in the Objects settings.');
+          return;
+        }
+        if (types.length === 1) {
+          new NewObjectModal(this.app, types[0], (title, fv, desc) =>
+            this.createObject(types[0], title, fv, desc),
+            initialTitle,
+          ).open();
+          return;
+        }
+        new CombinedNewObjectModal(this.app, types, (objType, title, fv, desc) =>
+          this.createObject(objType, title, fv, desc),
+          initialTitle,
+        ).open();
+      },
+    });
   }
 
   // ── File creation ─────────────────────────────────────────────────────────────

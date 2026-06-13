@@ -14,11 +14,13 @@ export class CombinedNewObjectModal extends Modal {
     app: App,
     objectTypes: ObjectType[],
     onSubmit: (objType: ObjectType, title: string, fieldValues: Record<string, string>, description: string) => void,
+    initialTitle = '',
   ) {
     super(app);
     this.objectTypes  = objectTypes;
     this.selectedType = objectTypes[0];
     this.onSubmit     = onSubmit;
+    this.titleValue   = initialTitle;
   }
 
   onOpen(): void {
@@ -43,12 +45,12 @@ export class CombinedNewObjectModal extends Modal {
     new Setting(contentEl)
       .setName('Title')
       .addText((text) => {
-        text.setPlaceholder('Enter title…').onChange((v) => { this.titleValue = v; });
+        text.setPlaceholder('Enter title…').setValue(this.titleValue).onChange((v) => { this.titleValue = v; });
         text.inputEl.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') this.submit();
           if (e.key === 'Escape') this.close();
         });
-        setTimeout(() => text.inputEl.focus(), 50);
+        setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
       });
 
     const descSetting = new Setting(contentEl)

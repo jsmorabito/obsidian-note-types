@@ -1,6 +1,6 @@
 {
   "name": "obsidian-objects",
-  "version": "1.4.3",
+  "version": "1.5.7",
   "description": "Define custom object types with creation commands, filtered file pickers, hover previews, and a sidebar widget.",
   "main": "main.js",
   "scripts": {

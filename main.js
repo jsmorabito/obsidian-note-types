@@ -1272,7 +1272,7 @@ var NewObjectModal = class extends import_obsidian8.Modal {
 // src/ui/combined-new-object-modal.ts
 var import_obsidian9 = require("obsidian");
 var CombinedNewObjectModal = class extends import_obsidian9.Modal {
-  constructor(app, objectTypes, onSubmit) {
+  constructor(app, objectTypes, onSubmit, initialTitle = "") {
     super(app);
     this.titleValue = "";
     this.fieldValues = {};
@@ -1280,6 +1280,7 @@ var CombinedNewObjectModal = class extends import_obsidian9.Modal {
     this.objectTypes = objectTypes;
     this.selectedType = objectTypes[0];
     this.onSubmit = onSubmit;
+    this.titleValue = initialTitle;
   }
   onOpen() {
     const { contentEl } = this;
@@ -1298,7 +1299,7 @@ var CombinedNewObjectModal = class extends import_obsidian9.Modal {
       });
     });
     new import_obsidian9.Setting(contentEl).setName("Title").addText((text) => {
-      text.setPlaceholder("Enter title\u2026").onChange((v) => {
+      text.setPlaceholder("Enter title\u2026").setValue(this.titleValue).onChange((v) => {
         this.titleValue = v;
       });
       text.inputEl.addEventListener("keydown", (e) => {
@@ -1307,7 +1308,10 @@ var CombinedNewObjectModal = class extends import_obsidian9.Modal {
         if (e.key === "Escape")
           this.close();
       });
-      setTimeout(() => text.inputEl.focus(), 50);
+      setTimeout(() => {
+        text.inputEl.focus();
+        text.inputEl.select();
+      }, 50);
     });
     const descSetting = new import_obsidian9.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
       ta.setPlaceholder("Optional description\u2026").onChange((v) => {
@@ -2723,6 +2727,33 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
           this.app,
           types,
           (objType, title, fv, desc) => this.createObject(objType, title, fv, desc)
+        ).open();
+      }
+    });
+    this.addCommand({
+      id: "ffc-new-object-from-selection",
+      name: "New object from selection",
+      editorCallback: (editor) => {
+        const initialTitle = editor.getSelection().trim();
+        const types = this.settings.objectTypes;
+        if (types.length === 0) {
+          new import_obsidian14.Notice("No object types defined. Add one in the Objects settings.");
+          return;
+        }
+        if (types.length === 1) {
+          new NewObjectModal(
+            this.app,
+            types[0],
+            (title, fv, desc) => this.createObject(types[0], title, fv, desc),
+            initialTitle
+          ).open();
+          return;
+        }
+        new CombinedNewObjectModal(
+          this.app,
+          types,
+          (objType, title, fv, desc) => this.createObject(objType, title, fv, desc),
+          initialTitle
         ).open();
       }
     });
