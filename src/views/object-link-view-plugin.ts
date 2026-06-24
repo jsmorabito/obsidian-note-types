@@ -1,11 +1,29 @@
-import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate } from '@codemirror/view';
+import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate, WidgetType } from '@codemirror/view';
 import { RangeSetBuilder } from '@codemirror/state';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
+import { statusToClass, statusSvg } from '../utils/status-svg.ts';
+
+class StatusIconWidget extends WidgetType {
+  constructor(private readonly cls: string, private readonly svg: string) { super(); }
+
+  toDOM(): HTMLElement {
+    const span = document.createElement('span');
+    span.className = `ffc-status-icon ${this.cls}`;
+    span.innerHTML = this.svg;
+    return span;
+  }
+
+  eq(other: StatusIconWidget): boolean { return other.cls === this.cls; }
+  ignoreEvent(): boolean { return true; }
+}
 
 /**
  * Scans the CM6 document for wikilinks whose targets are detected objects with
- * styledLinks enabled, and marks those ranges with CSS classes so styling can
- * be applied.
+ * styledLinks or showStatusInLinks enabled, and applies decorations.
+ *
+ * Status icons use Decoration.widget() (a point decoration before the [[) so
+ * CM6 never splits them — unlike Decoration.mark() which gets split into one
+ * span per bracket/text segment when the cursor enters the link.
  */
 export function buildObjectLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
   return ViewPlugin.fromClass(
@@ -48,23 +66,45 @@ export function buildObjectLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin)
       build(view: EditorView): DecorationSet {
         const basenames        = ffcPlugin.styledObjectBasenames;
         const previewBasenames = ffcPlugin.previewObjectBasenames;
+        const statusMap        = ffcPlugin.statusObjectMap;
         const hasStyled  = basenames        && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
-        if (!hasStyled && !hasPreview) return Decoration.none;
+        const hasStatus  = statusMap        && statusMap.size  > 0;
+        if (!hasStyled && !hasPreview && !hasStatus) return Decoration.none;
 
         const builder = new RangeSetBuilder<Decoration>();
         const text    = view.state.doc.toString();
         const re      = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
         let m: RegExpExecArray | null;
 
+        const selection = view.state.selection;
+
         while ((m = re.exec(text)) !== null) {
           const target         = m[1].trim();
           const targetBasename = target.includes('/') ? target.split('/').pop() ?? target : target;
           const isStyled  = hasStyled  && (basenames.has(target)        || basenames.has(targetBasename));
           const isPreview = hasPreview && (previewBasenames.has(target)  || previewBasenames.has(targetBasename));
+          const linkFrom  = m.index;
+          const linkTo    = m.index + m[0].length;
+          const cursorOnLink = selection.ranges.some(r => r.from <= linkTo && r.to >= linkFrom);
+
           if (isStyled || isPreview) {
             const cls = [isStyled ? 'ffc-obj-link' : '', isPreview ? 'ffc-obj-preview-link' : ''].filter(Boolean).join(' ');
-            builder.add(m.index, m.index + m[0].length, Decoration.mark({ class: cls }));
+            builder.add(linkFrom, linkTo, Decoration.mark({ class: cls }));
+          }
+
+          if (hasStatus && !cursorOnLink) {
+            const rawStatus = statusMap.get(targetBasename) ?? statusMap.get(target);
+            if (rawStatus) {
+              const cls = statusToClass(rawStatus);
+              const svg = statusSvg(rawStatus);
+              if (cls && svg) {
+                builder.add(linkFrom + 2, linkFrom + 2, Decoration.widget({
+                  widget: new StatusIconWidget(cls, svg),
+                  side: -1,
+                }));
+              }
+            }
           }
         }
         return builder.finish();

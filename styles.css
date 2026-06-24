@@ -743,3 +743,25 @@
   padding: 0.5rem;
   text-align: center;
 }
+
+/* ── Object link status icons ───────────────────────────────────────────── */
+/* Rendered as a CM6 widget (Decoration.widget) — a span injected before the
+   [[ by the view plugin. Using a widget rather than Decoration.mark class +
+   ::before avoids CM6 splitting the mark span into multiple pieces when the
+   cursor enters the link, which would produce multiple icons. */
+
+.ffc-status-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 3px;
+  vertical-align: middle;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+.ffc-status-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}

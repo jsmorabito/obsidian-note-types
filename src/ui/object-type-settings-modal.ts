@@ -123,6 +123,19 @@ export class ObjectTypeSettingsModal extends Modal {
           })
       );
 
+    new Setting(detectionSection)
+      .setName('Show status in links')
+      .setDesc('When enabled, a status icon is shown on inline links to files of this type that have a "status" frontmatter field.')
+      .addToggle((toggle) =>
+        toggle.setValue(obj.showStatusInLinks ?? false)
+          .onChange(async (value) => {
+            obj.showStatusInLinks = value;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledObjectSet();
+            this.plugin.refreshObjectLinkStyles();
+          })
+      );
+
     // ── Template & Save Folder ────────────────────────────────────────────────
     const templateFiles = this.plugin.getTemplateFiles();
     if (templateFiles.length > 0) {

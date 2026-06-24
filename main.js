@@ -339,6 +339,17 @@ var ObjectTypeSettingsModal = class extends import_obsidian3.Modal {
         });
       }
     );
+    new import_obsidian3.Setting(detectionSection).setName("Show status in links").setDesc('When enabled, a status icon is shown on inline links to files of this type that have a "status" frontmatter field.').addToggle(
+      (toggle) => {
+        var _a2;
+        return toggle.setValue((_a2 = obj.showStatusInLinks) != null ? _a2 : false).onChange(async (value) => {
+          obj.showStatusInLinks = value;
+          await this.plugin.saveSettings();
+          this.plugin.buildStyledObjectSet();
+          this.plugin.refreshObjectLinkStyles();
+        });
+      }
+    );
     const templateFiles = this.plugin.getTemplateFiles();
     if (templateFiles.length > 0) {
       new import_obsidian3.Setting(contentEl).setName("Template").setDesc("Template file applied when creating a new object of this type.").addDropdown((dd) => {
@@ -879,6 +890,41 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
   }
 };
 
+// src/utils/status-svg.ts
+var VALID_STATUSES = /* @__PURE__ */ new Set(["Backlog", "Todo", "In Progress", "Done", "Cancelled"]);
+function statusToClass(status) {
+  switch (status) {
+    case "Backlog":
+      return "ffc-status-backlog";
+    case "Todo":
+      return "ffc-status-todo";
+    case "In Progress":
+      return "ffc-status-in-progress";
+    case "Done":
+      return "ffc-status-done";
+    case "Cancelled":
+      return "ffc-status-cancelled";
+    default:
+      return "";
+  }
+}
+function statusSvg(status) {
+  switch (status) {
+    case "Backlog":
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#A1A1A1" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4"/></svg>`;
+    case "Todo":
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#A1A1A1" stroke-width="2" stroke-linecap="round"/></svg>`;
+    case "In Progress":
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#BD8E37" stroke-width="2" stroke-linecap="round"/><path d="M12 18C15.3137 18 18 15.3137 18 12C18 8.68629 15.3137 6 12 6V18Z" fill="#BD8E37"/></svg>`;
+    case "Done":
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM15.707 9.29297C15.3165 8.90244 14.6835 8.90244 14.293 9.29297L11 12.5859L9.70703 11.293C9.31651 10.9024 8.68349 10.9024 8.29297 11.293C7.90244 11.6835 7.90244 12.3165 8.29297 12.707L10.293 14.707C10.6835 15.0976 11.3165 15.0976 11.707 14.707L15.707 10.707C16.0976 10.3165 16.0976 9.68349 15.707 9.29297Z" fill="#8E68F5"/></svg>`;
+    case "Cancelled":
+      return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM15.707 8.29297C15.3165 7.90244 14.6835 7.90244 14.293 8.29297L12 10.5859L9.70703 8.29297C9.31651 7.90244 8.68349 7.90244 8.29297 8.29297C7.90244 8.68349 7.90244 9.31651 8.29297 9.70703L10.5859 12L8.29297 14.293C7.90244 14.6835 7.90244 15.3165 8.29297 15.707C8.68349 16.0976 9.31651 16.0976 9.70703 15.707L12 13.4141L14.293 15.707C14.6835 16.0976 15.3165 16.0976 15.707 15.707C16.0976 15.3165 16.0976 14.6835 15.707 14.293L13.4141 12L15.707 9.70703C16.0976 9.31651 16.0976 8.68349 15.707 8.29297Z" fill="#A1A1A1"/></svg>`;
+    default:
+      return "";
+  }
+}
+
 // src/utils/ffw-utils.ts
 var import_obsidian6 = require("obsidian");
 var FFW_VIEW_TYPE = "filtered-files-widget-view";
@@ -1280,7 +1326,7 @@ var CombinedNewObjectModal = class extends import_obsidian9.Modal {
     this.objectTypes = objectTypes;
     this.selectedType = objectTypes[0];
     this.onSubmit = onSubmit;
-    this.titleValue = initialTitle;
+    this.initialTitle = initialTitle;
   }
   onOpen() {
     const { contentEl } = this;
@@ -1299,9 +1345,10 @@ var CombinedNewObjectModal = class extends import_obsidian9.Modal {
       });
     });
     new import_obsidian9.Setting(contentEl).setName("Title").addText((text) => {
-      text.setPlaceholder("Enter title\u2026").setValue(this.titleValue).onChange((v) => {
+      text.setPlaceholder("Enter title\u2026").setValue(this.initialTitle).onChange((v) => {
         this.titleValue = v;
       });
+      this.titleValue = this.initialTitle;
       text.inputEl.addEventListener("keydown", (e) => {
         if (e.key === "Enter")
           this.submit();
@@ -2278,6 +2325,25 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
 // src/views/object-link-view-plugin.ts
 var import_view = require("@codemirror/view");
 var import_state = require("@codemirror/state");
+var StatusIconWidget = class extends import_view.WidgetType {
+  constructor(cls, svg) {
+    super();
+    this.cls = cls;
+    this.svg = svg;
+  }
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = `ffc-status-icon ${this.cls}`;
+    span.innerHTML = this.svg;
+    return span;
+  }
+  eq(other) {
+    return other.cls === this.cls;
+  }
+  ignoreEvent() {
+    return true;
+  }
+};
 function buildObjectLinkViewPlugin(ffcPlugin) {
   return import_view.ViewPlugin.fromClass(
     class {
@@ -2316,25 +2382,44 @@ function buildObjectLinkViewPlugin(ffcPlugin) {
         });
       }
       build(view) {
-        var _a;
+        var _a, _b;
         const basenames = ffcPlugin.styledObjectBasenames;
         const previewBasenames = ffcPlugin.previewObjectBasenames;
+        const statusMap = ffcPlugin.statusObjectMap;
         const hasStyled = basenames && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
-        if (!hasStyled && !hasPreview)
+        const hasStatus = statusMap && statusMap.size > 0;
+        if (!hasStyled && !hasPreview && !hasStatus)
           return import_view.Decoration.none;
         const builder = new import_state.RangeSetBuilder();
         const text = view.state.doc.toString();
         const re = /\[\[([^\]|#\n]+)(?:[|#][^\]\n]*)?\]\]/g;
         let m;
+        const selection = view.state.selection;
         while ((m = re.exec(text)) !== null) {
           const target = m[1].trim();
           const targetBasename = target.includes("/") ? (_a = target.split("/").pop()) != null ? _a : target : target;
           const isStyled = hasStyled && (basenames.has(target) || basenames.has(targetBasename));
           const isPreview = hasPreview && (previewBasenames.has(target) || previewBasenames.has(targetBasename));
+          const linkFrom = m.index;
+          const linkTo = m.index + m[0].length;
+          const cursorOnLink = selection.ranges.some((r) => r.from <= linkTo && r.to >= linkFrom);
           if (isStyled || isPreview) {
             const cls = [isStyled ? "ffc-obj-link" : "", isPreview ? "ffc-obj-preview-link" : ""].filter(Boolean).join(" ");
-            builder.add(m.index, m.index + m[0].length, import_view.Decoration.mark({ class: cls }));
+            builder.add(linkFrom, linkTo, import_view.Decoration.mark({ class: cls }));
+          }
+          if (hasStatus && !cursorOnLink) {
+            const rawStatus = (_b = statusMap.get(targetBasename)) != null ? _b : statusMap.get(target);
+            if (rawStatus) {
+              const cls = statusToClass(rawStatus);
+              const svg = statusSvg(rawStatus);
+              if (cls && svg) {
+                builder.add(linkFrom + 2, linkFrom + 2, import_view.Decoration.widget({
+                  widget: new StatusIconWidget(cls, svg),
+                  side: -1
+                }));
+              }
+            }
           }
         }
         return builder.finish();
@@ -2354,6 +2439,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     this.styledObjectPaths = /* @__PURE__ */ new Set();
     this.previewObjectBasenames = /* @__PURE__ */ new Set();
     this.previewObjectPaths = /* @__PURE__ */ new Set();
+    this.statusObjectMap = /* @__PURE__ */ new Map();
     // ── Trigger provider registry ─────────────────────────────────────────────────
     /**
      * External plugins can contribute items to the @ trigger menu by calling
@@ -2393,7 +2479,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     this.register(() => this.previewPopup.destroy());
     this.registerMarkdownPostProcessor((el) => {
       el.querySelectorAll("a.internal-link[data-href]").forEach((link) => {
-        var _a, _b;
+        var _a, _b, _c;
         const href = ((_a = link.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
         const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
         if (this.styledObjectBasenames.has(href) || this.styledObjectBasenames.has(basename)) {
@@ -2401,6 +2487,16 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
         }
         if (this.previewObjectBasenames.has(href) || this.previewObjectBasenames.has(basename)) {
           link.classList.add("ffc-obj-preview-link");
+        }
+        const status = (_c = this.statusObjectMap.get(basename)) != null ? _c : this.statusObjectMap.get(href);
+        if (status) {
+          const svg = statusSvg(status);
+          if (svg) {
+            const span = document.createElement("span");
+            span.className = "ffc-status-icon";
+            span.innerHTML = svg;
+            link.prepend(span);
+          }
         }
       });
     });
@@ -2706,6 +2802,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     this.registeredCommandIds.add(cmdId);
   }
   registerNewObjectCommand() {
+    var _a, _b;
     this.addCommand({
       id: "ffc-new-object",
       name: "New object",
@@ -2734,29 +2831,39 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
       id: "ffc-new-object-from-selection",
       name: "New object from selection",
       editorCallback: (editor) => {
-        const initialTitle = editor.getSelection().trim();
+        var _a2;
         const types = this.settings.objectTypes;
         if (types.length === 0) {
           new import_obsidian14.Notice("No object types defined. Add one in the Objects settings.");
           return;
         }
+        const selection = (_a2 = editor.getSelection()) == null ? void 0 : _a2.trim();
+        const from = editor.getCursor("from");
+        const to = editor.getCursor("to");
+        const replaceWithLink = async (title) => {
+          editor.replaceRange(`[[${title}]]`, from, to);
+        };
         if (types.length === 1) {
-          new NewObjectModal(
-            this.app,
-            types[0],
-            (title, fv, desc) => this.createObject(types[0], title, fv, desc),
-            initialTitle
-          ).open();
+          new NewObjectModal(this.app, types[0], async (title, fv, desc) => {
+            await replaceWithLink(title);
+            await this.createObject(types[0], title, fv, desc);
+          }, selection).open();
           return;
         }
-        new CombinedNewObjectModal(
-          this.app,
-          types,
-          (objType, title, fv, desc) => this.createObject(objType, title, fv, desc),
-          initialTitle
-        ).open();
+        new CombinedNewObjectModal(this.app, types, async (objType, title, fv, desc) => {
+          await replaceWithLink(title);
+          await this.createObject(objType, title, fv, desc);
+        }, selection).open();
       }
     });
+    const ttPlugin = (_b = (_a = this.app.plugins) == null ? void 0 : _a.getPlugin) == null ? void 0 : _b.call(_a, "text-formatting-toolbar");
+    if (ttPlugin == null ? void 0 : ttPlugin.api) {
+      ttPlugin.api.addCommand({
+        id: "filtered-file-commands:ffc-new-object-from-selection",
+        icon: "box-select",
+        name: "New object from selection"
+      });
+    }
   }
   // ── File creation ─────────────────────────────────────────────────────────────
   async createObject(objType, title, fieldValues = {}, description = "") {
@@ -2790,8 +2897,16 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     }
     try {
       const newFile = await this.app.vault.create(filePath, content);
-      await this.app.workspace.getLeaf(false).openFile(newFile);
-      new import_obsidian14.Notice(`Created: ${title}`);
+      const notice = new import_obsidian14.Notice("", 6e3);
+      const frag = notice.noticeEl.createSpan();
+      frag.appendText("Created: ");
+      const link = frag.createEl("a", { text: title, href: "#" });
+      link.style.cssText = "text-decoration:underline;cursor:pointer;";
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.app.workspace.getLeaf(false).openFile(newFile);
+        notice.hide();
+      });
     } catch (err) {
       new import_obsidian14.Notice(`Failed to create file: ${err.message}`);
     }
@@ -2992,14 +3107,15 @@ ${content}`;
   }
   // ── Object link styling ───────────────────────────────────────────────────────
   buildStyledObjectSet() {
-    var _a;
+    var _a, _b, _c;
     this.styledObjectBasenames = /* @__PURE__ */ new Set();
     this.styledObjectPaths = /* @__PURE__ */ new Set();
     this.previewObjectBasenames = /* @__PURE__ */ new Set();
     this.previewObjectPaths = /* @__PURE__ */ new Set();
+    this.statusObjectMap = /* @__PURE__ */ new Map();
     for (const objType of this.settings.objectTypes) {
       const hasPreview = ((_a = objType.previewFields) != null ? _a : []).length > 0;
-      if (!objType.styledLinks && !hasPreview)
+      if (!objType.styledLinks && !hasPreview && !objType.showStatusInLinks)
         continue;
       for (const file of this.getObjectTypeFiles(objType)) {
         if (objType.styledLinks) {
@@ -3009,6 +3125,12 @@ ${content}`;
         if (hasPreview) {
           this.previewObjectBasenames.add(file.basename);
           this.previewObjectPaths.add(file.path);
+        }
+        if (objType.showStatusInLinks) {
+          const raw = (_c = (_b = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _b.frontmatter) == null ? void 0 : _c["status"];
+          if (typeof raw === "string" && VALID_STATUSES.has(raw)) {
+            this.statusObjectMap.set(file.basename, raw);
+          }
         }
       }
     }

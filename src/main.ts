@@ -2,6 +2,7 @@ import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
 import { PluginSettings, ObjectType, CommandSpec } from './types.ts';
 import { nameToCommandSlug } from './utils/helpers.ts';
+import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
 import { FilteredFileModal } from './ui/filtered-file-modal.ts';
 import { NewObjectModal } from './ui/new-object-modal.ts';
@@ -25,6 +26,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
   styledObjectPaths:      Set<string> = new Set();
   previewObjectBasenames: Set<string> = new Set();
   previewObjectPaths:     Set<string> = new Set();
+  statusObjectMap:        Map<string, string> = new Map();
 
   private previewPopup!: ObjectPreviewPopup;
 
@@ -85,6 +87,16 @@ export class FilteredFileCommandsPlugin extends Plugin {
         }
         if (this.previewObjectBasenames.has(href) || this.previewObjectBasenames.has(basename)) {
           link.classList.add('ffc-obj-preview-link');
+        }
+        const status = this.statusObjectMap.get(basename) ?? this.statusObjectMap.get(href);
+        if (status) {
+          const svg = statusSvg(status);
+          if (svg) {
+            const span = document.createElement('span');
+            span.className = 'ffc-status-icon';
+            span.innerHTML = svg;
+            link.prepend(span);
+          }
         }
       });
     });
@@ -421,25 +433,40 @@ export class FilteredFileCommandsPlugin extends Plugin {
       id: 'ffc-new-object-from-selection',
       name: 'New object from selection',
       editorCallback: (editor) => {
-        const initialTitle = editor.getSelection().trim();
         const types = this.settings.objectTypes;
         if (types.length === 0) {
           new Notice('No object types defined. Add one in the Objects settings.');
           return;
         }
+        const selection = editor.getSelection()?.trim();
+        const from = editor.getCursor('from');
+        const to   = editor.getCursor('to');
+        const replaceWithLink = async (title: string) => {
+          editor.replaceRange(`[[${title}]]`, from, to);
+        };
         if (types.length === 1) {
-          new NewObjectModal(this.app, types[0], (title, fv, desc) =>
-            this.createObject(types[0], title, fv, desc),
-            initialTitle,
-          ).open();
+          new NewObjectModal(this.app, types[0], async (title, fv, desc) => {
+            await replaceWithLink(title);
+            await this.createObject(types[0], title, fv, desc);
+          }, selection).open();
           return;
         }
-        new CombinedNewObjectModal(this.app, types, (objType, title, fv, desc) =>
-          this.createObject(objType, title, fv, desc),
-          initialTitle,
-        ).open();
+        new CombinedNewObjectModal(this.app, types, async (objType, title, fv, desc) => {
+          await replaceWithLink(title);
+          await this.createObject(objType, title, fv, desc);
+        }, selection).open();
       },
     });
+
+    // Register with text-formatting-toolbar if available
+    const ttPlugin = (this.app as any).plugins?.getPlugin?.('text-formatting-toolbar');
+    if (ttPlugin?.api) {
+      ttPlugin.api.addCommand({
+        id: 'filtered-file-commands:ffc-new-object-from-selection',
+        icon: 'box-select',
+        name: 'New object from selection',
+      });
+    }
   }
 
   // ── File creation ─────────────────────────────────────────────────────────────
@@ -485,8 +512,16 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
     try {
       const newFile = await this.app.vault.create(filePath, content);
-      await this.app.workspace.getLeaf(false).openFile(newFile);
-      new Notice(`Created: ${title}`);
+      const notice = new Notice('', 6000);
+      const frag = notice.noticeEl.createSpan();
+      frag.appendText('Created: ');
+      const link = frag.createEl('a', { text: title, href: '#' });
+      link.style.cssText = 'text-decoration:underline;cursor:pointer;';
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.app.workspace.getLeaf(false).openFile(newFile);
+        notice.hide();
+      });
     } catch (err) {
       new Notice(`Failed to create file: ${(err as Error).message}`);
     }
@@ -657,9 +692,10 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.styledObjectPaths      = new Set();
     this.previewObjectBasenames = new Set();
     this.previewObjectPaths     = new Set();
+    this.statusObjectMap        = new Map();
     for (const objType of this.settings.objectTypes) {
       const hasPreview = (objType.previewFields ?? []).length > 0;
-      if (!objType.styledLinks && !hasPreview) continue;
+      if (!objType.styledLinks && !hasPreview && !objType.showStatusInLinks) continue;
       for (const file of this.getObjectTypeFiles(objType)) {
         if (objType.styledLinks) {
           this.styledObjectBasenames.add(file.basename);
@@ -668,6 +704,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
         if (hasPreview) {
           this.previewObjectBasenames.add(file.basename);
           this.previewObjectPaths.add(file.path);
+        }
+        if (objType.showStatusInLinks) {
+          const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.['status'];
+          if (typeof raw === 'string' && VALID_STATUSES.has(raw)) {
+            this.statusObjectMap.set(file.basename, raw);
+          }
         }
       }
     }

@@ -7,6 +7,7 @@ export class CombinedNewObjectModal extends Modal {
   private selectedType: ObjectType;
   private onSubmit: (objType: ObjectType, title: string, fieldValues: Record<string, string>, description: string) => void;
   private titleValue = '';
+  private initialTitle: string;
   private fieldValues: Record<string, string> = {};
   private descriptionValue = '';
 
@@ -20,7 +21,7 @@ export class CombinedNewObjectModal extends Modal {
     this.objectTypes  = objectTypes;
     this.selectedType = objectTypes[0];
     this.onSubmit     = onSubmit;
-    this.titleValue   = initialTitle;
+    this.initialTitle = initialTitle;
   }
 
   onOpen(): void {
@@ -45,7 +46,8 @@ export class CombinedNewObjectModal extends Modal {
     new Setting(contentEl)
       .setName('Title')
       .addText((text) => {
-        text.setPlaceholder('Enter title…').setValue(this.titleValue).onChange((v) => { this.titleValue = v; });
+        text.setPlaceholder('Enter title…').setValue(this.initialTitle).onChange((v) => { this.titleValue = v; });
+        this.titleValue = this.initialTitle;
         text.inputEl.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') this.submit();
           if (e.key === 'Escape') this.close();

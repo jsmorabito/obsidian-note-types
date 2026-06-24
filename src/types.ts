@@ -35,6 +35,7 @@ export interface ObjectType {
   enableFindCommand: boolean;
   showInTriggerMenu: boolean;
   styledLinks?: boolean;
+  showStatusInLinks?: boolean;
   previewFields: PreviewField[];
   canvasFields: CanvasField[];
   imageKey?: string;
