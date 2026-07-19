@@ -3,6 +3,8 @@ import type { FilteredFileCommandsPlugin } from './main.ts';
 import { PluginSettings } from './types.ts';
 import { NoteTypeSettingsModal } from './ui/note-type-settings-modal.ts';
 import { NoteTypeDeleteModal } from './ui/note-type-delete-modal.ts';
+import { FilteredCommandSettingsModal } from './ui/filtered-command-settings-modal.ts';
+import { FilteredCommandDeleteModal } from './ui/filtered-command-delete-modal.ts';
 import { nameToCommandSlug } from './utils/helpers.ts';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -127,9 +129,9 @@ export class MyPluginSettingTab extends PluginSettingTab {
       this.display();
     };
 
-    const objTypesList = containerEl.createDiv({ cls: 'setting-group ffc-notetype-list' });
+    const objTypesList = containerEl.createDiv({ cls: 'setting-group ffc-item-list' });
     if (this.plugin.settings.noteTypes.length === 0) {
-      objTypesList.createEl('p', { text: 'No note types yet. Select + to add one.', cls: 'ffc-hint ffc-notetype-empty' });
+      objTypesList.createEl('p', { text: 'No note types yet. Select + to add one.', cls: 'ffc-hint ffc-item-empty' });
     } else {
       for (let i = 0; i < this.plugin.settings.noteTypes.length; i++) {
         this.renderNoteTypeRow(objTypesList, i);
@@ -157,8 +159,13 @@ export class MyPluginSettingTab extends PluginSettingTab {
         this.display();
       };
 
-      for (let i = 0; i < this.plugin.settings.commands.length; i++) {
-        this.renderCommand(this.filteredCmdsSectionEl, i);
+      const cmdList = this.filteredCmdsSectionEl.createDiv({ cls: 'setting-group ffc-item-list' });
+      if (this.plugin.settings.commands.length === 0) {
+        cmdList.createEl('p', { text: 'No filtered commands yet. Select + to add one.', cls: 'ffc-hint ffc-item-empty' });
+      } else {
+        for (let i = 0; i < this.plugin.settings.commands.length; i++) {
+          this.renderFilteredCommandRow(cmdList, i);
+        }
       }
 
       containerEl.createEl('hr', { cls: 'ffc-divider' });
@@ -200,86 +207,35 @@ export class MyPluginSettingTab extends PluginSettingTab {
     }
   }
 
-  // ── Filtered command block ────────────────────────────────────────────────────
+  // ── Filtered command compact row ────────────────────────────────────────────────
 
-  private renderCommand(containerEl: HTMLElement, index: number): void {
-    const cmd   = this.plugin.settings.commands[index];
-    const block = containerEl.createDiv({ cls: 'ffc-command-block' });
-
-    const header = block.createDiv({ cls: 'ffc-command-header' });
-    header.createEl('span', { text: `Command ${index + 1}`, cls: 'ffc-command-label' });
-    header.createEl('button', { text: '✕ Remove', cls: 'mod-warning' }).onclick = async () => {
-      this.plugin.settings.commands.splice(index, 1);
-      await this.plugin.saveSettings();
-      this.display();
+  private renderFilteredCommandRow(containerEl: HTMLElement, index: number): void {
+    const cmd = this.plugin.settings.commands[index];
+    const row = containerEl.createDiv({ cls: 'ffc-item-row' });
+    row.onclick = (e) => {
+      if (!(e.target as Element).closest('.ffc-item-row-actions')) {
+        new FilteredCommandSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+      }
     };
 
-    new Setting(block).setName('Command name').setDesc('Shown in the command palette and hotkey settings.')
-      .addText((text) => text.setPlaceholder('e.g. Show Active Projects').setValue(cmd.name)
-        .onChange(async (value) => {
-          cmd.name = value;
-          await this.plugin.saveSettings();
-          const ref = this.plugin.commandRefs[cmd.id];
-          if (ref) ref.name = value;
-        })
-      );
+    const info = row.createDiv({ cls: 'ffc-item-row-info' });
+    info.createEl('div', { text: cmd.name || 'Unnamed', cls: 'ffc-item-row-name' });
+    const filterCount = cmd.filters.length;
+    const desc = `${filterCount} filter${filterCount === 1 ? '' : 's'}${cmd.fileTypes ? ` · ${cmd.fileTypes}` : ''}`;
+    info.createEl('div', { text: desc, cls: 'ffc-item-row-desc' });
 
-    new Setting(block).setName('Filter match mode').setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
-      .addDropdown((dd) => dd.addOption('all', 'Match ALL filters (AND)').addOption('any', 'Match ANY filter (OR)')
-        .setValue(cmd.matchMode)
-        .onChange(async (value) => { cmd.matchMode = value as 'all' | 'any'; await this.plugin.saveSettings(); })
-      );
+    const actions = row.createDiv({ cls: 'ffc-item-row-actions' });
 
-    new Setting(block).setName('File types').setDesc('Comma-separated extensions (e.g. md, canvas). Leave blank for markdown only.')
-      .addText((text) => text.setPlaceholder('md, canvas').setValue(cmd.fileTypes || '')
-        .onChange(async (value) => { cmd.fileTypes = value; await this.plugin.saveSettings(); })
-      );
+    const gearBtn = actions.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Edit settings' } });
+    setIcon(gearBtn, 'settings');
+    gearBtn.onclick = () => {
+      new FilteredCommandSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+    };
 
-    const filtersSection = block.createDiv({ cls: 'ffc-filters-section' });
-    filtersSection.createEl('p', { text: 'Frontmatter Filters', cls: 'ffc-filters-title' });
-    if (cmd.filters.length === 0) {
-      filtersSection.createEl('p', { text: 'No filters — all files of the specified type(s) will be shown.', cls: 'ffc-hint' });
-    }
-    for (let fi = 0; fi < cmd.filters.length; fi++) this.renderFilter(filtersSection, index, fi);
-    new Setting(filtersSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Filter').onClick(async () => {
-        cmd.filters.push({ key: '', operator: 'equals', value: '' });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-  }
-
-  private renderFilter(container: HTMLElement, cmdIndex: number, filterIndex: number): void {
-    const cmd    = this.plugin.settings.commands[cmdIndex];
-    const filter = cmd.filters[filterIndex];
-    const row    = container.createDiv({ cls: 'ffc-filter-row' });
-
-    const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
-    keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key;
-    keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
-
-    const opSelect = row.createEl('select', { cls: 'ffc-select' });
-    for (const op of [{ value: 'equals', label: '=' }, { value: 'not_equals', label: '≠' }, { value: 'contains', label: 'contains' }, { value: 'exists', label: 'exists' }]) {
-      const opt = opSelect.createEl('option', { text: op.label, value: op.value });
-      if (filter.operator === op.value) opt.selected = true;
-    }
-    opSelect.addEventListener('change', async () => {
-      filter.operator = opSelect.value as typeof filter.operator;
-      await this.plugin.saveSettings();
-      this.display();
-    });
-
-    if (filter.operator !== 'exists') {
-      const valInput = row.createEl('input', { cls: 'ffc-input ffc-input-val' });
-      valInput.type = 'text'; valInput.placeholder = 'Value'; valInput.value = filter.value;
-      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
-    }
-
-    row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
-      cmd.filters.splice(filterIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
+    const trashBtn = actions.createEl('button', { cls: 'clickable-icon ffc-btn-icon-danger', attr: { 'aria-label': 'Delete command' } });
+    setIcon(trashBtn, 'trash-2');
+    trashBtn.onclick = () => {
+      new FilteredCommandDeleteModal(this.app, this.plugin, index, () => this.display()).open();
     };
   }
 
@@ -287,20 +243,20 @@ export class MyPluginSettingTab extends PluginSettingTab {
 
   private renderNoteTypeRow(containerEl: HTMLElement, index: number): void {
     const obj = this.plugin.settings.noteTypes[index];
-    const row = containerEl.createDiv({ cls: 'ffc-notetype-row' });
+    const row = containerEl.createDiv({ cls: 'ffc-item-row' });
     row.onclick = (e) => {
-      if (!(e.target as Element).closest('.ffc-notetype-row-actions')) {
+      if (!(e.target as Element).closest('.ffc-item-row-actions')) {
         new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
       }
     };
 
-    const info = row.createDiv({ cls: 'ffc-notetype-row-info' });
-    info.createEl('div', { text: obj.name || 'Unnamed', cls: 'ffc-notetype-row-name' });
+    const info = row.createDiv({ cls: 'ffc-item-row-info' });
+    info.createEl('div', { text: obj.name || 'Unnamed', cls: 'ffc-item-row-name' });
     if (obj.description) {
-      info.createEl('div', { text: obj.description, cls: 'ffc-notetype-row-desc' });
+      info.createEl('div', { text: obj.description, cls: 'ffc-item-row-desc' });
     }
 
-    const actions = row.createDiv({ cls: 'ffc-notetype-row-actions' });
+    const actions = row.createDiv({ cls: 'ffc-item-row-actions' });
 
     const gearBtn = actions.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Edit settings' } });
     setIcon(gearBtn, 'settings');

@@ -19,7 +19,7 @@ export class NoteTypeSettingsModal extends Modal {
   private _render(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('ffc-notetype-modal');
+    contentEl.addClass('ffc-item-modal');
 
     const obj = this.plugin.settings.noteTypes[this.index];
     if (!obj) { contentEl.createEl('p', { text: 'Note type not found.' }); return; }

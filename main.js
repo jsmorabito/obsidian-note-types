@@ -24,10 +24,10 @@ __export(main_exports, {
   default: () => main_default
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian14 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/ui/note-type-settings-modal.ts
 var import_obsidian3 = require("obsidian");
@@ -243,7 +243,7 @@ var NoteTypeSettingsModal = class extends import_obsidian3.Modal {
     var _a, _b, _c, _d;
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass("ffc-notetype-modal");
+    contentEl.addClass("ffc-item-modal");
     const obj = this.plugin.settings.noteTypes[this.index];
     if (!obj) {
       contentEl.createEl("p", { text: "Note type not found." });
@@ -659,6 +659,149 @@ var NoteTypeDeleteModal = class extends import_obsidian4.Modal {
   }
 };
 
+// src/ui/filtered-command-settings-modal.ts
+var import_obsidian5 = require("obsidian");
+var FilteredCommandSettingsModal = class extends import_obsidian5.Modal {
+  constructor(app, plugin, index, onDismiss) {
+    super(app);
+    this.plugin = plugin;
+    this.index = index;
+    this.onDismiss = onDismiss;
+  }
+  onOpen() {
+    this._render();
+  }
+  _render() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("ffc-item-modal");
+    const cmd = this.plugin.settings.commands[this.index];
+    if (!cmd) {
+      contentEl.createEl("p", { text: "Command not found." });
+      return;
+    }
+    contentEl.createEl("h2", { text: cmd.name || "Command Settings", cls: "ffc-modal-title" });
+    new import_obsidian5.Setting(contentEl).setName("Command name").setDesc("Shown in the command palette and hotkey settings.").addText(
+      (text) => text.setPlaceholder("e.g. Show Active Projects").setValue(cmd.name).onChange(async (value) => {
+        cmd.name = value;
+        await this.plugin.saveSettings();
+        const ref = this.plugin.commandRefs[cmd.id];
+        if (ref)
+          ref.name = value;
+        const titleEl = contentEl.querySelector(".ffc-modal-title");
+        if (titleEl)
+          titleEl.textContent = value || "Command Settings";
+      })
+    );
+    new import_obsidian5.Setting(contentEl).setName("Filter match mode").setDesc("Should a file match ALL filters (AND) or at least ONE filter (OR)?").addDropdown(
+      (dd) => dd.addOption("all", "Match ALL filters (AND)").addOption("any", "Match ANY filter (OR)").setValue(cmd.matchMode).onChange(async (value) => {
+        cmd.matchMode = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian5.Setting(contentEl).setName("File types").setDesc("Comma-separated extensions (e.g. md, canvas). Leave blank for markdown only.").addText(
+      (text) => text.setPlaceholder("md, canvas").setValue(cmd.fileTypes || "").onChange(async (value) => {
+        cmd.fileTypes = value;
+        await this.plugin.saveSettings();
+      })
+    );
+    const filtersSection = contentEl.createDiv({ cls: "ffc-filters-section" });
+    filtersSection.createEl("p", { text: "Frontmatter Filters", cls: "ffc-filters-title" });
+    if (cmd.filters.length === 0) {
+      filtersSection.createEl("p", { text: "No filters \u2014 all files of the specified type(s) will be shown.", cls: "ffc-hint" });
+    }
+    for (let fi = 0; fi < cmd.filters.length; fi++)
+      this._renderFilter(filtersSection, fi);
+    new import_obsidian5.Setting(filtersSection).addButton(
+      (btn) => btn.setButtonText("\uFF0B Add Filter").onClick(async () => {
+        cmd.filters.push({ key: "", operator: "equals", value: "" });
+        await this.plugin.saveSettings();
+        this._render();
+      })
+    );
+  }
+  _renderFilter(container, filterIndex) {
+    const cmd = this.plugin.settings.commands[this.index];
+    const filter = cmd.filters[filterIndex];
+    const row = container.createDiv({ cls: "ffc-filter-row" });
+    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
+    keyInput.type = "text";
+    keyInput.placeholder = "Property key";
+    keyInput.value = filter.key;
+    keyInput.addEventListener("change", async () => {
+      filter.key = keyInput.value.trim();
+      await this.plugin.saveSettings();
+    });
+    const opSelect = row.createEl("select", { cls: "ffc-select" });
+    for (const op of [{ value: "equals", label: "=" }, { value: "not_equals", label: "\u2260" }, { value: "contains", label: "contains" }, { value: "exists", label: "exists" }]) {
+      const opt = opSelect.createEl("option", { text: op.label, value: op.value });
+      if (filter.operator === op.value)
+        opt.selected = true;
+    }
+    opSelect.addEventListener("change", async () => {
+      filter.operator = opSelect.value;
+      await this.plugin.saveSettings();
+      this._render();
+    });
+    if (filter.operator !== "exists") {
+      const valInput = row.createEl("input", { cls: "ffc-input ffc-input-val" });
+      valInput.type = "text";
+      valInput.placeholder = "Value";
+      valInput.value = filter.value;
+      valInput.addEventListener("change", async () => {
+        filter.value = valInput.value;
+        await this.plugin.saveSettings();
+      });
+    }
+    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
+      cmd.filters.splice(filterIndex, 1);
+      await this.plugin.saveSettings();
+      this._render();
+    };
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (this.onDismiss)
+      this.onDismiss();
+  }
+};
+
+// src/ui/filtered-command-delete-modal.ts
+var import_obsidian6 = require("obsidian");
+var FilteredCommandDeleteModal = class extends import_obsidian6.Modal {
+  constructor(app, plugin, index, onDismiss) {
+    super(app);
+    this.plugin = plugin;
+    this.index = index;
+    this.onDismiss = onDismiss;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("ffc-confirm-modal");
+    const cmd = this.plugin.settings.commands[this.index];
+    contentEl.createEl("h2", { text: "Delete Command?" });
+    contentEl.createEl("p", {
+      text: `Are you sure you want to delete "${(cmd == null ? void 0 : cmd.name) || "this command"}"? This will remove it from your settings.`,
+      cls: "ffc-confirm-desc"
+    });
+    const btnRow = contentEl.createDiv({ cls: "ffc-confirm-buttons" });
+    btnRow.createEl("button", { text: "Cancel", cls: "ffc-btn-cancel" }).onclick = () => {
+      this.close();
+    };
+    const deleteBtn = btnRow.createEl("button", { text: "Delete", cls: "mod-warning" });
+    deleteBtn.onclick = async () => {
+      this.plugin.settings.commands.splice(this.index, 1);
+      await this.plugin.saveSettings();
+      this.close();
+    };
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (this.onDismiss)
+      this.onDismiss();
+  }
+};
+
 // src/settings.ts
 var DEFAULT_SETTINGS = {
   commands: [],
@@ -670,7 +813,7 @@ var DEFAULT_SETTINGS = {
   ffwSections: [],
   ffwDisplayNameKey: ""
 };
-var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
+var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -682,19 +825,19 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
     this.filteredCmdsSectionEl = void 0;
     this.filteredWidgetSectionEl = void 0;
     containerEl.createEl("h2", { text: "General" });
-    new import_obsidian5.Setting(containerEl).setName("Trigger key").setDesc('Character that opens the inline note picker while editing (e.g. "@"). Leave blank to disable.').addText(
+    new import_obsidian7.Setting(containerEl).setName("Trigger key").setDesc('Character that opens the inline note picker while editing (e.g. "@"). Leave blank to disable.').addText(
       (text) => text.setPlaceholder("e.g. @").setValue(this.plugin.settings.triggerKey || "").onChange(async (value) => {
         this.plugin.settings.triggerKey = value.trim().slice(0, 1);
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian5.Setting(containerEl).setName("Templates folder").setDesc('Path to your templates folder (e.g. "Templates"). Leave blank to auto-detect from the core Templates plugin.').addText(
+    new import_obsidian7.Setting(containerEl).setName("Templates folder").setDesc('Path to your templates folder (e.g. "Templates"). Leave blank to auto-detect from the core Templates plugin.').addText(
       (text) => text.setPlaceholder("Templates").setValue(this.plugin.settings.templatesFolder || "").onChange(async (value) => {
         this.plugin.settings.templatesFolder = value.trim();
         await this.plugin.saveSettings();
       })
     );
-    const filteredCmdsSetting = new import_obsidian5.Setting(containerEl).setName("Filtered file commands").setDesc("Create palette commands that open a fuzzy file picker filtered by frontmatter.");
+    const filteredCmdsSetting = new import_obsidian7.Setting(containerEl).setName("Filtered file commands").setDesc("Create palette commands that open a fuzzy file picker filtered by frontmatter.");
     if (this.plugin.settings.filteredCommandsEnabled) {
       filteredCmdsSetting.addExtraButton(
         (btn) => btn.setIcon("arrow-down").setTooltip("Jump to Filtered File Commands").onClick(() => {
@@ -710,7 +853,7 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
         this.display();
       })
     );
-    const filteredWidgetSetting = new import_obsidian5.Setting(containerEl).setName("Filtered files widget").setDesc("A sidebar panel that shows lists of files matching configurable filter rules.");
+    const filteredWidgetSetting = new import_obsidian7.Setting(containerEl).setName("Filtered files widget").setDesc("A sidebar panel that shows lists of files matching configurable filter rules.");
     if (this.plugin.settings.filteredWidgetEnabled) {
       filteredWidgetSetting.addExtraButton(
         (btn) => btn.setIcon("arrow-down").setTooltip("Jump to Filtered Files Widget").onClick(() => {
@@ -733,7 +876,7 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
       cls: "clickable-icon ffc-btn-add",
       attr: { title: "Add note type", "aria-label": "Add note type" }
     });
-    (0, import_obsidian5.setIcon)(addObjTypeBtn, "plus");
+    (0, import_obsidian7.setIcon)(addObjTypeBtn, "plus");
     addObjTypeBtn.onclick = async () => {
       const id = `ffc-notetype-${Date.now()}`;
       const takenSlugs = new Set(this.plugin.settings.noteTypes.map((o) => o.commandSlug).filter(Boolean));
@@ -760,9 +903,9 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
       this.plugin.registerNoteTypeCommand(this.plugin.settings.noteTypes[this.plugin.settings.noteTypes.length - 1]);
       this.display();
     };
-    const objTypesList = containerEl.createDiv({ cls: "setting-group ffc-notetype-list" });
+    const objTypesList = containerEl.createDiv({ cls: "setting-group ffc-item-list" });
     if (this.plugin.settings.noteTypes.length === 0) {
-      objTypesList.createEl("p", { text: "No note types yet. Select + to add one.", cls: "ffc-hint ffc-notetype-empty" });
+      objTypesList.createEl("p", { text: "No note types yet. Select + to add one.", cls: "ffc-hint ffc-item-empty" });
     } else {
       for (let i = 0; i < this.plugin.settings.noteTypes.length; i++) {
         this.renderNoteTypeRow(objTypesList, i);
@@ -777,7 +920,7 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
         cls: "clickable-icon ffc-btn-add",
         attr: { title: "Add filtered command", "aria-label": "Add filtered command" }
       });
-      (0, import_obsidian5.setIcon)(addCmdBtn, "plus");
+      (0, import_obsidian7.setIcon)(addCmdBtn, "plus");
       addCmdBtn.onclick = async () => {
         const id = `ffc-command-${Date.now()}`;
         this.plugin.settings.commands.push({ id, name: "New Filtered Command", matchMode: "all", filters: [] });
@@ -785,139 +928,84 @@ var MyPluginSettingTab = class extends import_obsidian5.PluginSettingTab {
         this.plugin.registerFilterCommand(this.plugin.settings.commands[this.plugin.settings.commands.length - 1]);
         this.display();
       };
-      for (let i = 0; i < this.plugin.settings.commands.length; i++) {
-        this.renderCommand(this.filteredCmdsSectionEl, i);
+      const cmdList = this.filteredCmdsSectionEl.createDiv({ cls: "setting-group ffc-item-list" });
+      if (this.plugin.settings.commands.length === 0) {
+        cmdList.createEl("p", { text: "No filtered commands yet. Select + to add one.", cls: "ffc-hint ffc-item-empty" });
+      } else {
+        for (let i = 0; i < this.plugin.settings.commands.length; i++) {
+          this.renderFilteredCommandRow(cmdList, i);
+        }
       }
       containerEl.createEl("hr", { cls: "ffc-divider" });
     }
     if (this.plugin.settings.filteredWidgetEnabled) {
       this.filteredWidgetSectionEl = containerEl.createDiv();
       this.filteredWidgetSectionEl.createEl("h2", { text: "Filtered Files Widget" });
-      new import_obsidian5.Setting(this.filteredWidgetSectionEl).setName("Open the widget").setDesc("Reveal the filtered files widget in the left sidebar.").addButton((btn) => btn.setButtonText("Open widget").setCta().onClick(() => {
+      new import_obsidian7.Setting(this.filteredWidgetSectionEl).setName("Open the widget").setDesc("Reveal the filtered files widget in the left sidebar.").addButton((btn) => btn.setButtonText("Open widget").setCta().onClick(() => {
         this.plugin.activateWidgetView();
       }));
-      new import_obsidian5.Setting(this.filteredWidgetSectionEl).setName("Display name frontmatter key").setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.').addText(
+      new import_obsidian7.Setting(this.filteredWidgetSectionEl).setName("Display name frontmatter key").setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.').addText(
         (text) => text.setPlaceholder("e.g. title").setValue(this.plugin.settings.ffwDisplayNameKey).onChange(async (v) => {
           this.plugin.settings.ffwDisplayNameKey = v.trim();
           await this.plugin.saveSettings();
           this.plugin.refreshWidgetViews();
         })
       );
-      new import_obsidian5.Setting(this.filteredWidgetSectionEl).setName("Reset all filter sections").setDesc("Remove every filter section from the widget. This cannot be undone.").addButton((btn) => btn.setButtonText("Reset").setWarning().onClick(async () => {
+      new import_obsidian7.Setting(this.filteredWidgetSectionEl).setName("Reset all filter sections").setDesc("Remove every filter section from the widget. This cannot be undone.").addButton((btn) => btn.setButtonText("Reset").setWarning().onClick(async () => {
         this.plugin.settings.ffwSections = [];
         await this.plugin.saveSettings();
         this.plugin.refreshWidgetViews();
       }));
     }
   }
-  // ── Filtered command block ────────────────────────────────────────────────────
-  renderCommand(containerEl, index) {
+  // ── Filtered command compact row ────────────────────────────────────────────────
+  renderFilteredCommandRow(containerEl, index) {
     const cmd = this.plugin.settings.commands[index];
-    const block = containerEl.createDiv({ cls: "ffc-command-block" });
-    const header = block.createDiv({ cls: "ffc-command-header" });
-    header.createEl("span", { text: `Command ${index + 1}`, cls: "ffc-command-label" });
-    header.createEl("button", { text: "\u2715 Remove", cls: "mod-warning" }).onclick = async () => {
-      this.plugin.settings.commands.splice(index, 1);
-      await this.plugin.saveSettings();
-      this.display();
+    const row = containerEl.createDiv({ cls: "ffc-item-row" });
+    row.onclick = (e) => {
+      if (!e.target.closest(".ffc-item-row-actions")) {
+        new FilteredCommandSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+      }
     };
-    new import_obsidian5.Setting(block).setName("Command name").setDesc("Shown in the command palette and hotkey settings.").addText(
-      (text) => text.setPlaceholder("e.g. Show Active Projects").setValue(cmd.name).onChange(async (value) => {
-        cmd.name = value;
-        await this.plugin.saveSettings();
-        const ref = this.plugin.commandRefs[cmd.id];
-        if (ref)
-          ref.name = value;
-      })
-    );
-    new import_obsidian5.Setting(block).setName("Filter match mode").setDesc("Should a file match ALL filters (AND) or at least ONE filter (OR)?").addDropdown(
-      (dd) => dd.addOption("all", "Match ALL filters (AND)").addOption("any", "Match ANY filter (OR)").setValue(cmd.matchMode).onChange(async (value) => {
-        cmd.matchMode = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    new import_obsidian5.Setting(block).setName("File types").setDesc("Comma-separated extensions (e.g. md, canvas). Leave blank for markdown only.").addText(
-      (text) => text.setPlaceholder("md, canvas").setValue(cmd.fileTypes || "").onChange(async (value) => {
-        cmd.fileTypes = value;
-        await this.plugin.saveSettings();
-      })
-    );
-    const filtersSection = block.createDiv({ cls: "ffc-filters-section" });
-    filtersSection.createEl("p", { text: "Frontmatter Filters", cls: "ffc-filters-title" });
-    if (cmd.filters.length === 0) {
-      filtersSection.createEl("p", { text: "No filters \u2014 all files of the specified type(s) will be shown.", cls: "ffc-hint" });
-    }
-    for (let fi = 0; fi < cmd.filters.length; fi++)
-      this.renderFilter(filtersSection, index, fi);
-    new import_obsidian5.Setting(filtersSection).addButton(
-      (btn) => btn.setButtonText("\uFF0B Add Filter").onClick(async () => {
-        cmd.filters.push({ key: "", operator: "equals", value: "" });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-  }
-  renderFilter(container, cmdIndex, filterIndex) {
-    const cmd = this.plugin.settings.commands[cmdIndex];
-    const filter = cmd.filters[filterIndex];
-    const row = container.createDiv({ cls: "ffc-filter-row" });
-    const keyInput = row.createEl("input", { cls: "ffc-input ffc-input-key" });
-    keyInput.type = "text";
-    keyInput.placeholder = "Property key";
-    keyInput.value = filter.key;
-    keyInput.addEventListener("change", async () => {
-      filter.key = keyInput.value.trim();
-      await this.plugin.saveSettings();
-    });
-    const opSelect = row.createEl("select", { cls: "ffc-select" });
-    for (const op of [{ value: "equals", label: "=" }, { value: "not_equals", label: "\u2260" }, { value: "contains", label: "contains" }, { value: "exists", label: "exists" }]) {
-      const opt = opSelect.createEl("option", { text: op.label, value: op.value });
-      if (filter.operator === op.value)
-        opt.selected = true;
-    }
-    opSelect.addEventListener("change", async () => {
-      filter.operator = opSelect.value;
-      await this.plugin.saveSettings();
-      this.display();
-    });
-    if (filter.operator !== "exists") {
-      const valInput = row.createEl("input", { cls: "ffc-input ffc-input-val" });
-      valInput.type = "text";
-      valInput.placeholder = "Value";
-      valInput.value = filter.value;
-      valInput.addEventListener("change", async () => {
-        filter.value = valInput.value;
-        await this.plugin.saveSettings();
-      });
-    }
-    row.createEl("button", { text: "\u2715", cls: "ffc-btn-remove" }).onclick = async () => {
-      cmd.filters.splice(filterIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
+    const info = row.createDiv({ cls: "ffc-item-row-info" });
+    info.createEl("div", { text: cmd.name || "Unnamed", cls: "ffc-item-row-name" });
+    const filterCount = cmd.filters.length;
+    const desc = `${filterCount} filter${filterCount === 1 ? "" : "s"}${cmd.fileTypes ? ` \xB7 ${cmd.fileTypes}` : ""}`;
+    info.createEl("div", { text: desc, cls: "ffc-item-row-desc" });
+    const actions = row.createDiv({ cls: "ffc-item-row-actions" });
+    const gearBtn = actions.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Edit settings" } });
+    (0, import_obsidian7.setIcon)(gearBtn, "settings");
+    gearBtn.onclick = () => {
+      new FilteredCommandSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+    };
+    const trashBtn = actions.createEl("button", { cls: "clickable-icon ffc-btn-icon-danger", attr: { "aria-label": "Delete command" } });
+    (0, import_obsidian7.setIcon)(trashBtn, "trash-2");
+    trashBtn.onclick = () => {
+      new FilteredCommandDeleteModal(this.app, this.plugin, index, () => this.display()).open();
     };
   }
   // ── Note type compact row ─────────────────────────────────────────────────────
   renderNoteTypeRow(containerEl, index) {
     const obj = this.plugin.settings.noteTypes[index];
-    const row = containerEl.createDiv({ cls: "ffc-notetype-row" });
+    const row = containerEl.createDiv({ cls: "ffc-item-row" });
     row.onclick = (e) => {
-      if (!e.target.closest(".ffc-notetype-row-actions")) {
+      if (!e.target.closest(".ffc-item-row-actions")) {
         new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
       }
     };
-    const info = row.createDiv({ cls: "ffc-notetype-row-info" });
-    info.createEl("div", { text: obj.name || "Unnamed", cls: "ffc-notetype-row-name" });
+    const info = row.createDiv({ cls: "ffc-item-row-info" });
+    info.createEl("div", { text: obj.name || "Unnamed", cls: "ffc-item-row-name" });
     if (obj.description) {
-      info.createEl("div", { text: obj.description, cls: "ffc-notetype-row-desc" });
+      info.createEl("div", { text: obj.description, cls: "ffc-item-row-desc" });
     }
-    const actions = row.createDiv({ cls: "ffc-notetype-row-actions" });
+    const actions = row.createDiv({ cls: "ffc-item-row-actions" });
     const gearBtn = actions.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Edit settings" } });
-    (0, import_obsidian5.setIcon)(gearBtn, "settings");
+    (0, import_obsidian7.setIcon)(gearBtn, "settings");
     gearBtn.onclick = () => {
       new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
     };
     const trashBtn = actions.createEl("button", { cls: "clickable-icon ffc-btn-icon-danger", attr: { "aria-label": "Delete note type" } });
-    (0, import_obsidian5.setIcon)(trashBtn, "trash-2");
+    (0, import_obsidian7.setIcon)(trashBtn, "trash-2");
     trashBtn.onclick = () => {
       new NoteTypeDeleteModal(this.app, this.plugin, index, () => this.display()).open();
     };
@@ -960,7 +1048,7 @@ function statusSvg(status) {
 }
 
 // src/utils/ffw-utils.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var FFW_VIEW_TYPE = "filtered-files-widget-view";
 var FFW_FILTER_TYPE_LABELS = {
   tag: "Tag",
@@ -1102,7 +1190,7 @@ function ffwEvalTagFilter(cache, filter) {
   const tag = ffwNormalizeTag(filter.tag);
   if (!tag)
     return true;
-  const allTags = cache ? ((_a = (0, import_obsidian6.getAllTags)(cache)) != null ? _a : []).map(ffwNormalizeTag) : [];
+  const allTags = cache ? ((_a = (0, import_obsidian8.getAllTags)(cache)) != null ? _a : []).map(ffwNormalizeTag) : [];
   const has = allTags.includes(tag);
   return filter.include ? has : !has;
 }
@@ -1255,8 +1343,8 @@ function ffwGetSectionFiles(app, section) {
 }
 
 // src/ui/filtered-file-modal.ts
-var import_obsidian7 = require("obsidian");
-var FilteredFileModal = class extends import_obsidian7.FuzzySuggestModal {
+var import_obsidian9 = require("obsidian");
+var FilteredFileModal = class extends import_obsidian9.FuzzySuggestModal {
   constructor(app, files, typeName) {
     super(app);
     this.files = files;
@@ -1294,8 +1382,8 @@ var FilteredFileModal = class extends import_obsidian7.FuzzySuggestModal {
 };
 
 // src/ui/new-note-modal.ts
-var import_obsidian8 = require("obsidian");
-var NewNoteModal = class extends import_obsidian8.Modal {
+var import_obsidian10 = require("obsidian");
+var NewNoteModal = class extends import_obsidian10.Modal {
   constructor(app, noteType, onSubmit, initialTitle = "") {
     super(app);
     this.fieldValues = {};
@@ -1308,7 +1396,7 @@ var NewNoteModal = class extends import_obsidian8.Modal {
     const { contentEl } = this;
     contentEl.addClass("ffc-new-note-modal");
     contentEl.createEl("h2", { text: `New ${this.noteType.name}` });
-    new import_obsidian8.Setting(contentEl).setName("Title").addText((text) => {
+    new import_obsidian10.Setting(contentEl).setName("Title").addText((text) => {
       text.setPlaceholder(`Enter ${this.noteType.name} title\u2026`).setValue(this.titleValue).onChange((v) => {
         this.titleValue = v;
       });
@@ -1323,7 +1411,7 @@ var NewNoteModal = class extends import_obsidian8.Modal {
         text.inputEl.select();
       }, 50);
     });
-    const descSetting = new import_obsidian8.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+    const descSetting = new import_obsidian10.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
       ta.setPlaceholder("Optional description\u2026").onChange((v) => {
         this.descriptionValue = v;
       });
@@ -1333,12 +1421,12 @@ var NewNoteModal = class extends import_obsidian8.Modal {
       });
     });
     renderFieldInputs(contentEl, this.app, this.noteType, this.fieldValues, () => this.submit(), descSetting.settingEl);
-    new import_obsidian8.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+    new import_obsidian10.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
   }
   submit() {
     const title = this.titleValue.trim();
     if (!title) {
-      new import_obsidian8.Notice("Please enter a title.");
+      new import_obsidian10.Notice("Please enter a title.");
       return;
     }
     this.close();
@@ -1350,8 +1438,8 @@ var NewNoteModal = class extends import_obsidian8.Modal {
 };
 
 // src/ui/combined-new-note-modal.ts
-var import_obsidian9 = require("obsidian");
-var CombinedNewNoteModal = class extends import_obsidian9.Modal {
+var import_obsidian11 = require("obsidian");
+var CombinedNewNoteModal = class extends import_obsidian11.Modal {
   constructor(app, noteTypes, onSubmit, initialTitle = "") {
     super(app);
     this.titleValue = "";
@@ -1367,7 +1455,7 @@ var CombinedNewNoteModal = class extends import_obsidian9.Modal {
     contentEl.addClass("ffc-new-note-modal");
     contentEl.createEl("h2", { text: "New Note" });
     let descSettingEl = null;
-    new import_obsidian9.Setting(contentEl).setName("Type").addDropdown((dd) => {
+    new import_obsidian11.Setting(contentEl).setName("Type").addDropdown((dd) => {
       for (const obj of this.noteTypes)
         dd.addOption(obj.id, obj.name);
       dd.setValue(this.selectedType.id);
@@ -1378,7 +1466,7 @@ var CombinedNewNoteModal = class extends import_obsidian9.Modal {
         renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
       });
     });
-    new import_obsidian9.Setting(contentEl).setName("Title").addText((text) => {
+    new import_obsidian11.Setting(contentEl).setName("Title").addText((text) => {
       text.setPlaceholder("Enter title\u2026").setValue(this.initialTitle).onChange((v) => {
         this.titleValue = v;
       });
@@ -1394,7 +1482,7 @@ var CombinedNewNoteModal = class extends import_obsidian9.Modal {
         text.inputEl.select();
       }, 50);
     });
-    const descSetting = new import_obsidian9.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+    const descSetting = new import_obsidian11.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
       ta.setPlaceholder("Optional description\u2026").onChange((v) => {
         this.descriptionValue = v;
       });
@@ -1405,12 +1493,12 @@ var CombinedNewNoteModal = class extends import_obsidian9.Modal {
     });
     descSettingEl = descSetting.settingEl;
     renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
-    new import_obsidian9.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+    new import_obsidian11.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
   }
   submit() {
     const title = this.titleValue.trim();
     if (!title) {
-      new import_obsidian9.Notice("Please enter a title.");
+      new import_obsidian11.Notice("Please enter a title.");
       return;
     }
     this.close();
@@ -1422,8 +1510,8 @@ var CombinedNewNoteModal = class extends import_obsidian9.Modal {
 };
 
 // src/ui/note-type-suggest.ts
-var import_obsidian10 = require("obsidian");
-var NoteTypeSuggest = class extends import_obsidian10.EditorSuggest {
+var import_obsidian12 = require("obsidian");
+var NoteTypeSuggest = class extends import_obsidian12.EditorSuggest {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -1745,8 +1833,8 @@ var NotePreviewPopup = class {
 };
 
 // src/ui/canvas-note-switcher.ts
-var import_obsidian11 = require("obsidian");
-var CanvasNoteSwitcher = class extends import_obsidian11.FuzzySuggestModal {
+var import_obsidian13 = require("obsidian");
+var CanvasNoteSwitcher = class extends import_obsidian13.FuzzySuggestModal {
   constructor(app, plugin, canvas, dropPos) {
     super(app);
     this.plugin = plugin;
@@ -1838,9 +1926,9 @@ ${label}: ${displayVal}`;
       (_g = (_f = this.canvas).deselectAll) == null ? void 0 : _g.call(_f);
       if (node)
         (_i = (_h = this.canvas).selectOnly) == null ? void 0 : _i.call(_h, node);
-      new import_obsidian11.Notice(`Added "${title}" to canvas`);
+      new import_obsidian13.Notice(`Added "${title}" to canvas`);
     } catch (err) {
-      new import_obsidian11.Notice(`Could not add card to canvas: ${err.message}`);
+      new import_obsidian13.Notice(`Could not add card to canvas: ${err.message}`);
     }
   }
   _getViewportCenter() {
@@ -1867,11 +1955,11 @@ ${label}: ${displayVal}`;
 };
 
 // src/views/filtered-files-widget.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/views/ffw-section-edit-modal.ts
-var import_obsidian12 = require("obsidian");
-var FfwSectionEditModal = class extends import_obsidian12.Modal {
+var import_obsidian14 = require("obsidian");
+var FfwSectionEditModal = class extends import_obsidian14.Modal {
   constructor(app, section, onSave) {
     super(app);
     this.filtersContainer = null;
@@ -1884,7 +1972,7 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
     const { contentEl, titleEl } = this;
     contentEl.addClass("ffw-modal");
     titleEl.setText(this.isNew ? "Add filter section" : "Edit filter section");
-    new import_obsidian12.Setting(contentEl).setName("Title").setDesc("Shown as the section header in the widget.").addText(
+    new import_obsidian14.Setting(contentEl).setName("Title").setDesc("Shown as the section header in the widget.").addText(
       (text) => text.setPlaceholder("Active projects").setValue(this.working.title).onChange((v) => {
         this.working.title = v;
       })
@@ -1895,13 +1983,13 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
     this.renderFilterRows();
     const addRow = contentEl.createDiv({ cls: "ffw-add-filter-row" });
     for (const type of ["tag", "frontmatter", "path", "name"]) {
-      new import_obsidian12.ButtonComponent(addRow).setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`).onClick(() => {
+      new import_obsidian14.ButtonComponent(addRow).setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`).onClick(() => {
         this.working.filters.push(ffwDefaultFilter(type));
         this.renderFilterRows();
       });
     }
     contentEl.createEl("h3", { text: "Sort" });
-    new import_obsidian12.Setting(contentEl).setName("Sort by").addDropdown((dd) => {
+    new import_obsidian14.Setting(contentEl).setName("Sort by").addDropdown((dd) => {
       for (const opt of FFW_SORT_OPTIONS)
         dd.addOption(opt.value, opt.label);
       dd.setValue(this.working.sort.field).onChange((v) => {
@@ -1910,7 +1998,7 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
       });
     });
     this.frontmatterKeyContainer = contentEl.createDiv();
-    new import_obsidian12.Setting(this.frontmatterKeyContainer).setName("Frontmatter sort key").setDesc("Required when sorting by a frontmatter field.").addText(
+    new import_obsidian14.Setting(this.frontmatterKeyContainer).setName("Frontmatter sort key").setDesc("Required when sorting by a frontmatter field.").addText(
       (text) => {
         var _a;
         return text.setPlaceholder("Due").setValue((_a = this.working.sort.frontmatterKey) != null ? _a : "").onChange((v) => {
@@ -1919,15 +2007,15 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
       }
     );
     this.updateFrontmatterKeyVisibility();
-    new import_obsidian12.Setting(contentEl).setName("Result limit").setDesc("Maximum number of files to show. 0 means unlimited.").addText(
+    new import_obsidian14.Setting(contentEl).setName("Result limit").setDesc("Maximum number of files to show. 0 means unlimited.").addText(
       (text) => text.setPlaceholder("0").setValue(String(this.working.maxResults)).onChange((v) => {
         const n = parseInt(v, 10);
         this.working.maxResults = Number.isFinite(n) && n > 0 ? n : 0;
       })
     );
     const btnRow = contentEl.createDiv({ cls: "modal-button-container" });
-    new import_obsidian12.ButtonComponent(btnRow).setButtonText("Cancel").onClick(() => this.close());
-    new import_obsidian12.ButtonComponent(btnRow).setButtonText(this.isNew ? "Add section" : "Save").setCta().onClick(() => this.handleSave());
+    new import_obsidian14.ButtonComponent(btnRow).setButtonText("Cancel").onClick(() => this.close());
+    new import_obsidian14.ButtonComponent(btnRow).setButtonText(this.isNew ? "Add section" : "Save").setCta().onClick(() => this.handleSave());
   }
   onClose() {
     this.contentEl.empty();
@@ -2073,15 +2161,15 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
   handleSave() {
     const title = this.working.title.trim();
     if (!title) {
-      new import_obsidian12.Notice("Please enter a title for the section.");
+      new import_obsidian14.Notice("Please enter a title for the section.");
       return;
     }
     if (this.working.filters.length === 0) {
-      new import_obsidian12.Notice("Add at least one filter to the section.");
+      new import_obsidian14.Notice("Add at least one filter to the section.");
       return;
     }
     if ((this.working.sort.field === "frontmatter-asc" || this.working.sort.field === "frontmatter-desc") && !this.working.sort.frontmatterKey) {
-      new import_obsidian12.Notice("Please specify a frontmatter key to sort by.");
+      new import_obsidian14.Notice("Please specify a frontmatter key to sort by.");
       return;
     }
     this.working.title = title;
@@ -2091,7 +2179,7 @@ var FfwSectionEditModal = class extends import_obsidian12.Modal {
 };
 
 // src/views/filtered-files-widget.ts
-var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
+var FilteredFilesWidgetView = class extends import_obsidian15.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.query = "";
@@ -2099,7 +2187,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     this.sectionsEl = null;
     this.dragSourceId = null;
     this.plugin = plugin;
-    this.refresh = (0, import_obsidian13.debounce)(() => this.render(), 80, true);
+    this.refresh = (0, import_obsidian15.debounce)(() => this.render(), 80, true);
   }
   getViewType() {
     return FFW_VIEW_TYPE;
@@ -2135,7 +2223,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
   }
   renderHeader(el) {
     const row = el.createDiv({ cls: "ffw-header" }).createDiv({ cls: "ffw-search-row" });
-    const search = new import_obsidian13.SearchComponent(row);
+    const search = new import_obsidian15.SearchComponent(row);
     search.setPlaceholder("Filter...");
     search.setValue(this.query);
     search.onChange((v) => {
@@ -2143,7 +2231,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
       this.renderSections();
     });
     const addBtn = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Add filter section" } });
-    (0, import_obsidian13.setIcon)(addBtn, "plus");
+    (0, import_obsidian15.setIcon)(addBtn, "plus");
     addBtn.addEventListener("click", () => this.openAddModal());
   }
   renderSections() {
@@ -2174,10 +2262,10 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     sectionEl.addEventListener("dragend", () => this.clearDragState());
     const header = sectionEl.createDiv({ cls: "ffw-section-header" });
     const dragHandle = header.createSpan({ cls: "ffw-drag-handle" });
-    (0, import_obsidian13.setIcon)(dragHandle, "grip-vertical");
+    (0, import_obsidian15.setIcon)(dragHandle, "grip-vertical");
     dragHandle.setAttr("aria-label", "Drag to reorder");
     const collapseToggle = header.createSpan({ cls: "ffw-collapse-toggle" });
-    (0, import_obsidian13.setIcon)(collapseToggle, section.collapsed ? "chevron-right" : "chevron-down");
+    (0, import_obsidian15.setIcon)(collapseToggle, section.collapsed ? "chevron-right" : "chevron-down");
     collapseToggle.setAttr("aria-label", section.collapsed ? "Expand section" : "Collapse section");
     collapseToggle.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2219,7 +2307,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     if (iconicIcon == null ? void 0 : iconicIcon.icon) {
       ffwSetIconEl(iconEl, iconicIcon.icon, iconicIcon.color);
     } else {
-      (0, import_obsidian13.setIcon)(iconEl, "file-text");
+      (0, import_obsidian15.setIcon)(iconEl, "file-text");
     }
     const labelEl = row.createDiv({ cls: "ffw-file-label" });
     const key = this.plugin.settings.ffwDisplayNameKey;
@@ -2234,7 +2322,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     });
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new import_obsidian13.Menu();
+      const menu = new import_obsidian15.Menu();
       menu.addItem((item) => item.setTitle("Open").setIcon("file-text").onClick(() => this.app.workspace.openLinkText(file.path, "", false)));
       menu.addItem((item) => item.setTitle("Open in new tab").setIcon("file-plus").onClick(() => this.app.workspace.openLinkText(file.path, "", true)));
       menu.addItem((item) => item.setTitle("Reveal in file explorer").setIcon("folder").onClick(() => {
@@ -2248,14 +2336,14 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
           } catch (e2) {
           }
         }
-        new import_obsidian13.Notice("Could not reveal file in the file explorer.");
+        new import_obsidian15.Notice("Could not reveal file in the file explorer.");
       }));
       menu.showAtMouseEvent(e);
     });
   }
   addIconButton(el, icon, label, onClick) {
     const btn = el.createEl("button", { cls: "clickable-icon" });
-    (0, import_obsidian13.setIcon)(btn, icon);
+    (0, import_obsidian15.setIcon)(btn, icon);
     btn.setAttr("aria-label", label);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2263,7 +2351,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     });
   }
   openSectionMenu(section, e) {
-    const menu = new import_obsidian13.Menu();
+    const menu = new import_obsidian15.Menu();
     menu.addItem((item) => item.setTitle("Edit").setIcon("pencil").onClick(() => this.openEditModal(section)));
     menu.addItem((item) => item.setTitle("Duplicate").setIcon("copy").onClick(() => this.duplicateSection(section)));
     menu.addSeparator();
@@ -2312,7 +2400,7 @@ var FilteredFilesWidgetView = class extends import_obsidian13.ItemView {
     await this.plugin.saveSettings();
     this.renderSections();
     if (removed)
-      new import_obsidian13.Notice(`Removed "${removed.title}"`);
+      new import_obsidian15.Notice(`Removed "${removed.title}"`);
   }
   // ── Drag-and-drop reorder ─────────────────────────────────────────────────────
   handleDragStart(e, id) {
@@ -2464,7 +2552,7 @@ function buildNoteLinkViewPlugin(ffcPlugin) {
 }
 
 // src/main.ts
-var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
+var FilteredFileCommandsPlugin = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
     this.commandRefs = {};
@@ -2564,7 +2652,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
               subItem.setTitle(noteType.name).onClick(() => {
                 const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
                 if (!current) {
-                  new import_obsidian14.Notice("Note type not found. Try reloading.");
+                  new import_obsidian16.Notice("Note type not found. Try reloading.");
                   return;
                 }
                 new NewNoteModal(
@@ -2722,12 +2810,12 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
       callback: () => {
         const current = this.settings.commands.find((c) => c.id === cmd.id);
         if (!current) {
-          new import_obsidian14.Notice("Note Types: Command not found. Try reloading.");
+          new import_obsidian16.Notice("Note Types: Command not found. Try reloading.");
           return;
         }
         const files = this.getFilteredFiles(current);
         if (files.length === 0) {
-          new import_obsidian14.Notice("Note Types: No files match the current filters.");
+          new import_obsidian16.Notice("Note Types: No files match the current filters.");
           return;
         }
         new FilteredFileModal(this.app, files).open();
@@ -2802,7 +2890,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
         if (!current) {
-          new import_obsidian14.Notice("Note type not found. Try reloading.");
+          new import_obsidian16.Notice("Note type not found. Try reloading.");
           return;
         }
         new NewNoteModal(
@@ -2825,12 +2913,12 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
         if (!current) {
-          new import_obsidian14.Notice("Note Types: Note type not found. Try reloading.");
+          new import_obsidian16.Notice("Note Types: Note type not found. Try reloading.");
           return;
         }
         const files = this.getNoteTypeFiles(current);
         if (files.length === 0) {
-          new import_obsidian14.Notice("Note Types: No files match this note type.");
+          new import_obsidian16.Notice("Note Types: No files match this note type.");
           return;
         }
         new FilteredFileModal(this.app, files, current.name).open();
@@ -2847,7 +2935,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
       callback: () => {
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new import_obsidian14.Notice("No note types defined. Add one in the Note Types settings.");
+          new import_obsidian16.Notice("No note types defined. Add one in the Note Types settings.");
           return;
         }
         if (types.length === 1) {
@@ -2872,7 +2960,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
         var _a2;
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new import_obsidian14.Notice("No note types defined. Add one in the Note Types settings.");
+          new import_obsidian16.Notice("No note types defined. Add one in the Note Types settings.");
           return;
         }
         const selection = (_a2 = editor.getSelection()) == null ? void 0 : _a2.trim();
@@ -2909,16 +2997,16 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     const saveFolder = (_b = (_a = noteType.saveFolder) == null ? void 0 : _a.trim()) != null ? _b : "";
     const filePath = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
     if (this.app.vault.getAbstractFileByPath(filePath)) {
-      new import_obsidian14.Notice(`A file named "${title}" already exists at that location.`);
+      new import_obsidian16.Notice(`A file named "${title}" already exists at that location.`);
       return;
     }
     let content = "";
     if (noteType.templatePath) {
       const tplFile = this.app.vault.getAbstractFileByPath(noteType.templatePath);
-      if (tplFile instanceof import_obsidian14.TFile) {
+      if (tplFile instanceof import_obsidian16.TFile) {
         content = await this.app.vault.read(tplFile);
       } else {
-        new import_obsidian14.Notice(`Template not found: ${noteType.templatePath}`);
+        new import_obsidian16.Notice(`Template not found: ${noteType.templatePath}`);
       }
     }
     const now = new Date();
@@ -2935,7 +3023,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
     }
     try {
       const newFile = await this.app.vault.create(filePath, content);
-      const notice = new import_obsidian14.Notice("", 6e3);
+      const notice = new import_obsidian16.Notice("", 6e3);
       const frag = notice.noticeEl.createSpan();
       frag.appendText("Created: ");
       const link = frag.createEl("a", { text: title, href: "#" });
@@ -2946,7 +3034,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian14.Plugin {
         notice.hide();
       });
     } catch (err) {
-      new import_obsidian14.Notice(`Failed to create file: ${err.message}`);
+      new import_obsidian16.Notice(`Failed to create file: ${err.message}`);
     }
   }
   injectFieldsIntoContent(content, noteType, fieldValues) {

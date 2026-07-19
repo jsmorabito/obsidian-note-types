@@ -18,29 +18,6 @@
   margin: 2em 0;
 }
 
-.ffc-command-block {
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  padding: 16px;
-  margin-bottom: 20px;
-  background: var(--background-secondary);
-}
-
-.ffc-command-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.ffc-command-label {
-  font-weight: 600;
-  font-size: 1em;
-  color: var(--text-accent);
-}
-
-.ffc-notetype-label { color: var(--color-green); }
-
 .ffc-filters-section {
   margin-top: 12px;
   padding-top: 12px;
@@ -138,24 +115,25 @@
 .ffc-btn-icon-danger:hover { color: var(--color-red) !important; }
 
 
-/* ── Note types list ────────────────────────────────────────────────────── */
-/* Mirrors Obsidian's installed-plugins card + row pattern. */
+/* ── Compact item list ──────────────────────────────────────────────────── */
+/* Mirrors Obsidian's installed-plugins card + row pattern. Shared by the
+   Note Types list and the Filtered File Commands list. */
 
-.ffc-notetype-list {
+.ffc-item-list {
   background: var(--setting-items-background);
   border-radius: var(--radius-m);
   padding: 0 18px;
   margin-bottom: 16px;
 }
 
-.ffc-notetype-empty {
+.ffc-item-empty {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.9em;
   padding: 4px 0;
 }
 
-.ffc-notetype-row {
+.ffc-item-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -163,25 +141,25 @@
   cursor: pointer;
 }
 
-.ffc-notetype-row + .ffc-notetype-row {
+.ffc-item-row + .ffc-item-row {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.ffc-notetype-row-info { flex: 1; min-width: 0; }
+.ffc-item-row-info { flex: 1; min-width: 0; }
 
-.ffc-notetype-row-name {
+.ffc-item-row-name {
   font-size: var(--font-ui-medium);
   font-weight: var(--font-semibold);
   color: var(--text-normal);
   margin-bottom: 2px;
 }
 
-.ffc-notetype-row-desc {
+.ffc-item-row-desc {
   font-size: var(--font-ui-small);
   color: var(--text-muted);
 }
 
-.ffc-notetype-row-actions {
+.ffc-item-row-actions {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -192,7 +170,7 @@
 
 /* ── Modals ─────────────────────────────────────────────────────────────── */
 
-.ffc-notetype-modal { padding: 4px 8px 16px; max-width: 640px; }
+.ffc-item-modal { padding: 4px 8px 16px; max-width: 640px; }
 .ffc-modal-title   { margin-bottom: 16px; }
 
 .ffc-confirm-modal { padding: 8px; }
