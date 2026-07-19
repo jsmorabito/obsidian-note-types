@@ -4,8 +4,8 @@ import type { TriggerProvider, TriggerItem } from '../trigger-registry.ts';
 
 // ── Suggestion item types ──────────────────────────────────────────────────────
 
-interface ObjectSuggestionItem {
-  kind: 'object';
+interface NoteSuggestionItem {
+  kind: 'note';
   file: TFile;
   title: string;
 }
@@ -16,19 +16,19 @@ interface ProviderSuggestionItem {
   item: TriggerItem;
 }
 
-type SuggestionItem = ObjectSuggestionItem | ProviderSuggestionItem;
+type SuggestionItem = NoteSuggestionItem | ProviderSuggestionItem;
 
 // ── Suggest class ──────────────────────────────────────────────────────────────
 
 /**
  * Watches the editor for the user-configured trigger key (e.g. "@") and opens
  * a fuzzy suggestion menu populated by:
- *   1. All files that match any object type's match filters.
+ *   1. All files that match any note type's match filters.
  *   2. Items from any registered TriggerProviders (e.g. obsidian-time-tools).
  *
  * Selecting an item inserts a [[wikilink]] or delegates to the provider.
  */
-export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
+export class NoteTypeSuggest extends EditorSuggest<SuggestionItem> {
   private plugin: FilteredFileCommandsPlugin;
 
   constructor(app: App, plugin: FilteredFileCommandsPlugin) {
@@ -60,14 +60,14 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
   getSuggestions(context: EditorSuggestContext): SuggestionItem[] {
     const query = context.query.toLowerCase();
 
-    // ── Object-type items (existing behaviour) ─────────────────────────────────
-    const objectItems: ObjectSuggestionItem[] = this._getMatchingFiles()
+    // ── Note-type items (existing behaviour) ───────────────────────────────────
+    const noteItems: NoteSuggestionItem[] = this._getMatchingFiles()
       .map((file) => {
         const cache = this.app.metadataCache.getFileCache(file);
         const title = cache?.frontmatter?.['title']
           ? String(cache.frontmatter['title'])
           : file.basename;
-        return { kind: 'object' as const, file, title };
+        return { kind: 'note' as const, file, title };
       })
       .filter(({ title }) => title.toLowerCase().includes(query))
       .sort((a, b) => {
@@ -84,15 +84,15 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
       }
     }
 
-    return [...objectItems, ...providerItems].slice(0, 30);
+    return [...noteItems, ...providerItems].slice(0, 30);
   }
 
   private _getMatchingFiles(): TFile[] {
     const seen   = new Set<string>();
     const result: TFile[] = [];
-    for (const objType of this.plugin.settings.objectTypes) {
-      if (!objType.showInTriggerMenu) continue;
-      for (const file of this.plugin.getObjectTypeFiles(objType)) {
+    for (const noteType of this.plugin.settings.noteTypes) {
+      if (!noteType.showInTriggerMenu) continue;
+      for (const file of this.plugin.getNoteTypeFiles(noteType)) {
         if (!seen.has(file.path)) {
           seen.add(file.path);
           result.push(file);
@@ -115,7 +115,7 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
       return;
     }
 
-    // Object-type item (existing behaviour)
+    // Note-type item (existing behaviour)
     el.createEl('span', { text: suggestion.title, cls: 'suggestion-title' });
     const folder = suggestion.file.parent?.path;
     if (folder && folder !== '/') {
@@ -137,7 +137,7 @@ export class ObjectTypeSuggest extends EditorSuggest<SuggestionItem> {
       return;
     }
 
-    // Object-type item (existing behaviour)
+    // Note-type item (existing behaviour)
     const { file, title } = suggestion;
     const link = title !== file.basename
       ? `[[${file.basename}|${title}]]`

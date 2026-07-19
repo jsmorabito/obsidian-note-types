@@ -1,11 +1,11 @@
 import { App, Modal, Notice, Setting } from 'obsidian';
-import { ObjectType } from '../types.ts';
+import { NoteType } from '../types.ts';
 import { renderFieldInputs } from '../utils/helpers.ts';
 
-export class CombinedNewObjectModal extends Modal {
-  private objectTypes: ObjectType[];
-  private selectedType: ObjectType;
-  private onSubmit: (objType: ObjectType, title: string, fieldValues: Record<string, string>, description: string) => void;
+export class CombinedNewNoteModal extends Modal {
+  private noteTypes: NoteType[];
+  private selectedType: NoteType;
+  private onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void;
   private titleValue = '';
   private initialTitle: string;
   private fieldValues: Record<string, string> = {};
@@ -13,31 +13,31 @@ export class CombinedNewObjectModal extends Modal {
 
   constructor(
     app: App,
-    objectTypes: ObjectType[],
-    onSubmit: (objType: ObjectType, title: string, fieldValues: Record<string, string>, description: string) => void,
+    noteTypes: NoteType[],
+    onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void,
     initialTitle = '',
   ) {
     super(app);
-    this.objectTypes  = objectTypes;
-    this.selectedType = objectTypes[0];
+    this.noteTypes    = noteTypes;
+    this.selectedType = noteTypes[0];
     this.onSubmit     = onSubmit;
     this.initialTitle = initialTitle;
   }
 
   onOpen(): void {
     const { contentEl } = this;
-    contentEl.addClass('ffc-new-object-modal');
-    contentEl.createEl('h2', { text: 'New Object' });
+    contentEl.addClass('ffc-new-note-modal');
+    contentEl.createEl('h2', { text: 'New Note' });
 
     let descSettingEl: HTMLElement | null = null;
 
     new Setting(contentEl)
       .setName('Type')
       .addDropdown((dd) => {
-        for (const obj of this.objectTypes) dd.addOption(obj.id, obj.name);
+        for (const obj of this.noteTypes) dd.addOption(obj.id, obj.name);
         dd.setValue(this.selectedType.id);
         dd.onChange((id) => {
-          this.selectedType = this.objectTypes.find((o) => o.id === id) ?? this.objectTypes[0];
+          this.selectedType = this.noteTypes.find((o) => o.id === id) ?? this.noteTypes[0];
           this.fieldValues  = {};
           renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
         });

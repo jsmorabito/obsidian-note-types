@@ -1,17 +1,17 @@
 import { App, Setting } from 'obsidian';
-import { ObjectType } from '../types.ts';
+import { NoteType } from '../types.ts';
 import { FrontmatterValueSuggest } from '../ui/frontmatter-value-suggest.ts';
 
 /**
- * Convert an object type name to a stable command slug.
+ * Convert a note type name to a stable command slug.
  * e.g. "My Task" → "my-task", "  Hello World! " → "hello-world"
  */
 export function nameToCommandSlug(name: string): string {
-  return (name || 'object')
+  return (name || 'note')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    || 'object';
+    || 'note';
 }
 
 /**
@@ -41,13 +41,13 @@ export function getVaultValuesForKey(app: App, key: string): string[] {
 }
 
 /**
- * Render the extra frontmatter fields defined on an object type into a container.
+ * Render the extra frontmatter fields defined on a note type into a container.
  * Attaches vault-wide autocomplete to every field input.
  */
 export function renderFieldInputs(
   container: HTMLElement,
   app: App,
-  objType: ObjectType | undefined,
+  noteType: NoteType | undefined,
   fieldValues: Record<string, string>,
   onEnter: () => void,
   insertBefore: HTMLElement | null = null,
@@ -55,7 +55,7 @@ export function renderFieldInputs(
   // Remove only previously-rendered dynamic field rows
   container.querySelectorAll('[data-ffc-field]').forEach(el => el.remove());
 
-  const fields = objType?.fields ?? [];
+  const fields = noteType?.fields ?? [];
   for (const field of fields) {
     const s = new Setting(container)
       .setName(field.label || field.key)

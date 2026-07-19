@@ -1,10 +1,10 @@
 import { App, FuzzySuggestModal, Notice, TFile, setIcon } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
-import { ObjectType } from '../types.ts';
+import { NoteType } from '../types.ts';
 
 interface CanvasItem {
   file: TFile;
-  objType: ObjectType;
+  noteType: NoteType;
 }
 
 // Minimal interface for the undocumented Obsidian Canvas API
@@ -22,11 +22,11 @@ interface ObsidianCanvas {
 }
 
 /**
- * Fuzzy quick-switcher that searches across all object files from every object
+ * Fuzzy quick-switcher that searches across all note files from every note
  * type. Selecting a file creates a canvas text node using that type's configured
  * canvasFields.
  */
-export class CanvasObjectSwitcher extends FuzzySuggestModal<CanvasItem> {
+export class CanvasNoteSwitcher extends FuzzySuggestModal<CanvasItem> {
   private plugin: FilteredFileCommandsPlugin;
   private canvas: ObsidianCanvas;
   private dropPos: { x: number; y: number } | null;
@@ -43,7 +43,7 @@ export class CanvasObjectSwitcher extends FuzzySuggestModal<CanvasItem> {
     this.canvas  = canvas;
     this.dropPos = dropPos;
 
-    this.setPlaceholder('Search objects…');
+    this.setPlaceholder('Search notes…');
     this.setInstructions([
       { command: '↑↓', purpose: 'navigate' },
       { command: '↵',  purpose: 'add to canvas' },
@@ -52,42 +52,42 @@ export class CanvasObjectSwitcher extends FuzzySuggestModal<CanvasItem> {
 
     const seen = new Set<string>();
     this._items = [];
-    for (const objType of plugin.settings.objectTypes) {
-      for (const file of plugin.getObjectTypeFiles(objType)) {
+    for (const noteType of plugin.settings.noteTypes) {
+      for (const file of plugin.getNoteTypeFiles(noteType)) {
         if (seen.has(file.path)) continue;
         seen.add(file.path);
-        this._items.push({ file, objType });
+        this._items.push({ file, noteType });
       }
     }
   }
 
   getItems(): CanvasItem[] { return this._items; }
 
-  getItemText({ file, objType }: CanvasItem): string {
+  getItemText({ file, noteType }: CanvasItem): string {
     const fm    = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const title = fm['title'] ? String(fm['title']) : file.basename;
-    return `${title} ${file.basename} ${objType.name}`;
+    return `${title} ${file.basename} ${noteType.name}`;
   }
 
-  renderSuggestion({ item: { file, objType } }: { item: CanvasItem }, el: HTMLElement): void {
+  renderSuggestion({ item: { file, noteType } }: { item: CanvasItem }, el: HTMLElement): void {
     const fm    = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const title = fm['title'] ? String(fm['title']) : file.basename;
-    el.createEl('span', { text: title,       cls: 'suggestion-title' });
-    el.createEl('span', { text: objType.name, cls: 'suggestion-note'  });
+    el.createEl('span', { text: title,        cls: 'suggestion-title' });
+    el.createEl('span', { text: noteType.name, cls: 'suggestion-note'  });
   }
 
-  onChooseItem({ file, objType }: CanvasItem): void {
-    this._createCanvasCard(file, objType);
+  onChooseItem({ file, noteType }: CanvasItem): void {
+    this._createCanvasCard(file, noteType);
   }
 
-  private _createCanvasCard(file: TFile, objType: ObjectType): void {
+  private _createCanvasCard(file: TFile, noteType: NoteType): void {
     const fm           = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const title        = fm['title'] ? String(fm['title']) : file.basename;
-    const canvasFields = objType.canvasFields ?? [];
+    const canvasFields = noteType.canvasFields ?? [];
 
     let imageEmbed = '';
-    if (objType.showImageInCanvas && objType.imageKey) {
-      const rawImg = fm[objType.imageKey];
+    if (noteType.showImageInCanvas && noteType.imageKey) {
+      const rawImg = fm[noteType.imageKey];
       if (rawImg) {
         const v = String(rawImg).trim();
         if (/^https?:\/\//i.test(v)) {

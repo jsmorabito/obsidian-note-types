@@ -18,14 +18,14 @@ class StatusIconWidget extends WidgetType {
 }
 
 /**
- * Scans the CM6 document for wikilinks whose targets are detected objects with
+ * Scans the CM6 document for wikilinks whose targets are detected notes with
  * styledLinks or showStatusInLinks enabled, and applies decorations.
  *
  * Status icons use Decoration.widget() (a point decoration before the [[) so
  * CM6 never splits them — unlike Decoration.mark() which gets split into one
  * span per bracket/text segment when the cursor enters the link.
  */
-export function buildObjectLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
+export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
@@ -48,25 +48,25 @@ export function buildObjectLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin)
        * we apply the class directly to the DOM elements here.
        */
       applyFoldedLinkClasses(view: EditorView): void {
-        const basenames        = ffcPlugin.styledObjectBasenames;
-        const previewBasenames = ffcPlugin.previewObjectBasenames;
+        const basenames        = ffcPlugin.styledNoteBasenames;
+        const previewBasenames = ffcPlugin.previewNoteBasenames;
         const hasStyled  = basenames        && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
 
         view.dom.querySelectorAll('a.internal-link[data-href]').forEach((el) => {
           const href     = (el.getAttribute('data-href') ?? '').split('#')[0].trim();
           const basename = href.includes('/') ? href.split('/').pop() ?? href : href;
-          (el as HTMLElement).classList.toggle('ffc-obj-link',
+          (el as HTMLElement).classList.toggle('ffc-note-link',
             hasStyled  && (basenames.has(href) || basenames.has(basename)));
-          (el as HTMLElement).classList.toggle('ffc-obj-preview-link',
+          (el as HTMLElement).classList.toggle('ffc-note-preview-link',
             hasPreview && (previewBasenames.has(href) || previewBasenames.has(basename)));
         });
       }
 
       build(view: EditorView): DecorationSet {
-        const basenames        = ffcPlugin.styledObjectBasenames;
-        const previewBasenames = ffcPlugin.previewObjectBasenames;
-        const statusMap        = ffcPlugin.statusObjectMap;
+        const basenames        = ffcPlugin.styledNoteBasenames;
+        const previewBasenames = ffcPlugin.previewNoteBasenames;
+        const statusMap        = ffcPlugin.statusNoteMap;
         const hasStyled  = basenames        && basenames.size > 0;
         const hasPreview = previewBasenames && previewBasenames.size > 0;
         const hasStatus  = statusMap        && statusMap.size  > 0;
@@ -89,7 +89,7 @@ export function buildObjectLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin)
           const cursorOnLink = selection.ranges.some(r => r.from <= linkTo && r.to >= linkFrom);
 
           if (isStyled || isPreview) {
-            const cls = [isStyled ? 'ffc-obj-link' : '', isPreview ? 'ffc-obj-preview-link' : ''].filter(Boolean).join(' ');
+            const cls = [isStyled ? 'ffc-note-link' : '', isPreview ? 'ffc-note-preview-link' : ''].filter(Boolean).join(' ');
             builder.add(linkFrom, linkTo, Decoration.mark({ class: cls }));
           }
 
