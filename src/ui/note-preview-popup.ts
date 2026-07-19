@@ -1,12 +1,12 @@
 import { App, TFile } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
-import { ObjectType } from '../types.ts';
+import { NoteType } from '../types.ts';
 
 /**
- * Shows a hover card when the user hovers over an object link.
+ * Shows a hover card when the user hovers over a note link.
  * Works in both reading mode (<a class="internal-link">) and live-preview (CM6).
  */
-export class ObjectPreviewPopup {
+export class NotePreviewPopup {
   private plugin: FilteredFileCommandsPlugin;
   private popup: HTMLElement | null        = null;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
@@ -58,8 +58,8 @@ export class ObjectPreviewPopup {
     const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkpath, '');
     if (!file) return;
 
-    const objType = this._getObjectTypeForFile(file);
-    if (!objType) return;
+    const noteType = this._getNoteTypeForFile(file);
+    if (!noteType) return;
 
     if (this.hideTimer) clearTimeout(this.hideTimer);
     if (this.showTimer) clearTimeout(this.showTimer);
@@ -67,7 +67,7 @@ export class ObjectPreviewPopup {
 
     const triggerEl = anchor ?? el.closest('.cm-hmd-internal-link') ?? null;
     this.showTimer = setTimeout(() => {
-      this._showForFile(file, objType, e.clientX, e.clientY, triggerEl as HTMLElement | null);
+      this._showForFile(file, noteType, e.clientX, e.clientY, triggerEl as HTMLElement | null);
     }, 280);
   }
 
@@ -82,13 +82,13 @@ export class ObjectPreviewPopup {
 
   private async _showForFile(
     file: TFile,
-    objType: ObjectType,
+    noteType: NoteType,
     clientX: number,
     clientY: number,
     triggerEl: HTMLElement | null,
   ): Promise<void> {
-    const hasFields = (objType.previewFields?.length ?? 0) > 0;
-    const hasImage  = !!(objType.showImageInPreview && objType.imageKey);
+    const hasFields = (noteType.previewFields?.length ?? 0) > 0;
+    const hasImage  = !!(noteType.showImageInPreview && noteType.imageKey);
     if (!hasFields && !hasImage) return;
 
     const app = this.plugin.app;
@@ -101,8 +101,8 @@ export class ObjectPreviewPopup {
     const popup = document.createElement('div');
     popup.className = 'ffc-preview-popup';
 
-    if (hasImage && objType.imageKey) {
-      const rawImg = fm[objType.imageKey] as string | undefined;
+    if (hasImage && noteType.imageKey) {
+      const rawImg = fm[noteType.imageKey] as string | undefined;
       const imgSrc = rawImg ? await this._resolveImageSrc(String(rawImg).trim(), app) : null;
       if (imgSrc) {
         const imgEl = popup.createEl('img', { cls: 'ffc-preview-image' });
@@ -136,7 +136,7 @@ export class ObjectPreviewPopup {
       }
     };
 
-    for (const pf of (objType.previewFields ?? [])) {
+    for (const pf of (noteType.previewFields ?? [])) {
       const key   = typeof pf === 'string' ? pf : (pf.key ?? '');
       const label = (typeof pf === 'string' ? pf : (pf.label || pf.key)) || key;
       if (!key) continue;
@@ -220,13 +220,13 @@ export class ObjectPreviewPopup {
     return null;
   }
 
-  private _getObjectTypeForFile(file: TFile): ObjectType | null {
-    for (const objType of this.plugin.settings.objectTypes) {
-      const hasContent = (objType.previewFields?.length ?? 0) > 0 ||
-                         (objType.showImageInPreview && objType.imageKey);
+  private _getNoteTypeForFile(file: TFile): NoteType | null {
+    for (const noteType of this.plugin.settings.noteTypes) {
+      const hasContent = (noteType.previewFields?.length ?? 0) > 0 ||
+                         (noteType.showImageInPreview && noteType.imageKey);
       if (!hasContent) continue;
-      const files = this.plugin.getObjectTypeFiles(objType);
-      if (files.some((f) => f.path === file.path)) return objType;
+      const files = this.plugin.getNoteTypeFiles(noteType);
+      if (files.some((f) => f.path === file.path)) return noteType;
     }
     return null;
   }

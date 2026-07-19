@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Objects Plugin — styles.css
+   Note Types Plugin — styles.css
    Uses Obsidian CSS variables throughout so all values respond to themes.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -39,7 +39,7 @@
   color: var(--text-accent);
 }
 
-.ffc-objtype-label { color: var(--color-green); }
+.ffc-notetype-label { color: var(--color-green); }
 
 .ffc-filters-section {
   margin-top: 12px;
@@ -138,24 +138,24 @@
 .ffc-btn-icon-danger:hover { color: var(--color-red) !important; }
 
 
-/* ── Object types list ──────────────────────────────────────────────────── */
+/* ── Note types list ────────────────────────────────────────────────────── */
 /* Mirrors Obsidian's installed-plugins card + row pattern. */
 
-.ffc-objtype-list {
+.ffc-notetype-list {
   background: var(--setting-items-background);
   border-radius: var(--radius-m);
   padding: 0 18px;
   margin-bottom: 16px;
 }
 
-.ffc-objtype-empty {
+.ffc-notetype-empty {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.9em;
   padding: 4px 0;
 }
 
-.ffc-objtype-row {
+.ffc-notetype-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -163,25 +163,25 @@
   cursor: pointer;
 }
 
-.ffc-objtype-row + .ffc-objtype-row {
+.ffc-notetype-row + .ffc-notetype-row {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.ffc-objtype-row-info { flex: 1; min-width: 0; }
+.ffc-notetype-row-info { flex: 1; min-width: 0; }
 
-.ffc-objtype-row-name {
+.ffc-notetype-row-name {
   font-size: var(--font-ui-medium);
   font-weight: var(--font-semibold);
   color: var(--text-normal);
   margin-bottom: 2px;
 }
 
-.ffc-objtype-row-desc {
+.ffc-notetype-row-desc {
   font-size: var(--font-ui-small);
   color: var(--text-muted);
 }
 
-.ffc-objtype-row-actions {
+.ffc-notetype-row-actions {
   display: flex;
   align-items: center;
   gap: 2px;
@@ -192,7 +192,7 @@
 
 /* ── Modals ─────────────────────────────────────────────────────────────── */
 
-.ffc-objtype-modal { padding: 4px 8px 16px; max-width: 640px; }
+.ffc-notetype-modal { padding: 4px 8px 16px; max-width: 640px; }
 .ffc-modal-title   { margin-bottom: 16px; }
 
 .ffc-confirm-modal { padding: 8px; }
@@ -218,12 +218,12 @@
 
 .ffc-btn-cancel:hover { background: var(--interactive-hover); }
 
-.ffc-new-object-modal    { padding: 8px; }
-.ffc-new-object-modal h2 { margin-bottom: 16px; }
+.ffc-new-note-modal    { padding: 8px; }
+.ffc-new-note-modal h2 { margin-bottom: 16px; }
 
 /* Textarea — layout only; let Obsidian's own theme styles handle
    background, border, color, and font so it matches text inputs exactly */
-.ffc-new-object-modal textarea {
+.ffc-new-note-modal textarea {
   width: 100%;
   min-height: 80px;
   resize: vertical;
@@ -232,15 +232,15 @@
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Object link pills
+   Note link pills
    ══════════════════════════════════════════════════════════════════════════ */
 
 
 /* ── Reading / preview mode ─────────────────────────────────────────────── */
 
-.markdown-rendered a.internal-link.ffc-obj-link,
-.markdown-preview-view a.internal-link.ffc-obj-link,
-.markdown-reading-view a.internal-link.ffc-obj-link {
+.markdown-rendered a.internal-link.ffc-note-link,
+.markdown-preview-view a.internal-link.ffc-note-link,
+.markdown-reading-view a.internal-link.ffc-note-link {
   --link-decoration: none;
   --link-decoration-hover: none;
   text-decoration: none !important;
@@ -253,9 +253,9 @@
   font-size: var(--tag-size, inherit);
 }
 
-.markdown-rendered a.internal-link.ffc-obj-link:hover,
-.markdown-preview-view a.internal-link.ffc-obj-link:hover,
-.markdown-reading-view a.internal-link.ffc-obj-link:hover {
+.markdown-rendered a.internal-link.ffc-note-link:hover,
+.markdown-preview-view a.internal-link.ffc-note-link:hover,
+.markdown-reading-view a.internal-link.ffc-note-link:hover {
   --link-decoration: none;
   --link-decoration-hover: none;
   text-decoration: none !important;
@@ -266,7 +266,7 @@
 }
 
 
-/* ── Object preview popup ───────────────────────────────────────────────── */
+/* ── Note preview popup ─────────────────────────────────────────────────── */
 
 .ffc-preview-popup {
   position: fixed;
@@ -350,9 +350,9 @@
 /* ── Live preview / source mode (CM6 decoration) ────────────────────────── */
 
 /* Folded wikilinks (cursor is elsewhere): Obsidian renders a single <a> widget
-   element. We apply ffc-obj-link to it via DOM in the view plugin, and style it
+   element. We apply ffc-note-link to it via DOM in the view plugin, and style it
    here. Being a single element, border-radius and padding work without issue. */
-.cm-editor a.internal-link.ffc-obj-link {
+.cm-editor a.internal-link.ffc-note-link {
   --link-decoration: none;
   --link-decoration-hover: none;
   text-decoration: none !important;
@@ -364,7 +364,7 @@
   border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
 }
 
-.cm-editor a.internal-link.ffc-obj-link:hover {
+.cm-editor a.internal-link.ffc-note-link:hover {
   background: var(--tag-background-hover, var(--interactive-hover));
   color: var(--tag-color-hover, var(--tag-color)) !important;
   border-color: var(--tag-border-color-hover, var(--tag-border-color, transparent));
@@ -375,17 +375,17 @@
    via Decoration.mark(). border-radius and box-shadow on individual spans cause
    separate pill shapes and semi-transparent stacking at boundaries (dark
    rectangles on the bracket chars). Plain background flows continuously. */
-.cm-editor .ffc-obj-link {
+.cm-editor .ffc-note-link {
   background: var(--tag-background);
   padding: 2px 0;
 }
 
 /* Target the inner CM6 link spans directly — you can't cancel a child's
    own text-decoration by setting none on an ancestor wrapper. */
-.cm-editor .ffc-obj-link,
-.cm-editor .ffc-obj-link .cm-hmd-internal-link,
-.cm-editor .ffc-obj-link .cm-link,
-.cm-editor .ffc-obj-link .cm-underline {
+.cm-editor .ffc-note-link,
+.cm-editor .ffc-note-link .cm-hmd-internal-link,
+.cm-editor .ffc-note-link .cm-link,
+.cm-editor .ffc-note-link .cm-underline {
   text-decoration: none !important;
   text-decoration-line: none !important;
   color: var(--tag-color) !important;
@@ -393,17 +393,17 @@
 
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Canvas — object card button
+   Canvas — note card button
    ══════════════════════════════════════════════════════════════════════════ */
 
 /* Our button is a <div class="canvas-card-menu-button mod-draggable
-   ffc-canvas-object-btn">. Obsidian's app.css already styles
+   ffc-canvas-note-btn">. Obsidian's app.css already styles
    .canvas-card-menu-button (flex, icon size, padding, hover lift) and
    .mod-draggable (cursor: grab). No overrides needed — the element picks up
    all native behaviour automatically just by having those classes. */
 
 /* Dim the button while a drag is in flight */
-.canvas-card-menu-button.ffc-canvas-object-btn.is-dragging {
+.canvas-card-menu-button.ffc-canvas-note-btn.is-dragging {
   opacity: 0.4;
 }
 
@@ -744,7 +744,7 @@
   text-align: center;
 }
 
-/* ── Object link status icons ───────────────────────────────────────────── */
+/* ── Note link status icons ─────────────────────────────────────────────── */
 /* Rendered as a CM6 widget (Decoration.widget) — a span injected before the
    [[ by the view plugin. Using a widget rather than Decoration.mark class +
    ::before avoids CM6 splitting the mark span into multiple pieces when the

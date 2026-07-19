@@ -1,17 +1,17 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
-import { PluginSettings, ObjectType, CommandSpec } from './types.ts';
+import { PluginSettings, NoteType, CommandSpec } from './types.ts';
 import { nameToCommandSlug } from './utils/helpers.ts';
 import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
 import { FilteredFileModal } from './ui/filtered-file-modal.ts';
-import { NewObjectModal } from './ui/new-object-modal.ts';
-import { CombinedNewObjectModal } from './ui/combined-new-object-modal.ts';
-import { ObjectTypeSuggest } from './ui/object-type-suggest.ts';
-import { ObjectPreviewPopup } from './ui/object-preview-popup.ts';
-import { CanvasObjectSwitcher, ObsidianCanvas } from './ui/canvas-object-switcher.ts';
+import { NewNoteModal } from './ui/new-note-modal.ts';
+import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
+import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
+import { NotePreviewPopup } from './ui/note-preview-popup.ts';
+import { CanvasNoteSwitcher, ObsidianCanvas } from './ui/canvas-note-switcher.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
-import { buildObjectLinkViewPlugin } from './views/object-link-view-plugin.ts';
+import { buildNoteLinkViewPlugin } from './views/note-link-view-plugin.ts';
 import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
@@ -22,13 +22,13 @@ export class FilteredFileCommandsPlugin extends Plugin {
   commandRefs: Record<string, CommandRef> = {};
   registeredCommandIds = new Set<string>();
 
-  styledObjectBasenames:  Set<string> = new Set();
-  styledObjectPaths:      Set<string> = new Set();
-  previewObjectBasenames: Set<string> = new Set();
-  previewObjectPaths:     Set<string> = new Set();
-  statusObjectMap:        Map<string, string> = new Map();
+  styledNoteBasenames:  Set<string> = new Set();
+  styledNotePaths:      Set<string> = new Set();
+  previewNoteBasenames: Set<string> = new Set();
+  previewNotePaths:     Set<string> = new Set();
+  statusNoteMap:        Map<string, string> = new Map();
 
-  private previewPopup!: ObjectPreviewPopup;
+  private previewPopup!: NotePreviewPopup;
 
   // ── Trigger provider registry ─────────────────────────────────────────────────
 
@@ -56,39 +56,43 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
     // ── Filtered Files Widget ───────────────────────────────────────────────────
     this.registerView(FFW_VIEW_TYPE, (leaf) => new FilteredFilesWidgetView(leaf, this));
-    this.addRibbonIcon('file-sliders', 'Open filtered files widget', () => this.activateWidgetView());
-    this.addCommand({
-      id:       'ffc-open-filtered-files-widget',
-      name:     'Open filtered files widget',
-      callback: () => this.activateWidgetView(),
-    });
-
-    for (const cmd of this.settings.commands)      this.registerFilterCommand(cmd);
-    for (const obj of this.settings.objectTypes) {
-      this.registerObjectTypeCommand(obj);
-      if (obj.enableFindCommand) this.registerFindCommand(obj);
+    if (this.settings.filteredWidgetEnabled) {
+      this.addRibbonIcon('file-sliders', 'Open filtered files widget', () => this.activateWidgetView());
+      this.addCommand({
+        id:       'ffc-open-filtered-files-widget',
+        name:     'Open filtered files widget',
+        callback: () => this.activateWidgetView(),
+      });
     }
-    this.registerNewObjectCommand();
 
-    this.registerEditorSuggest(new ObjectTypeSuggest(this.app, this));
+    if (this.settings.filteredCommandsEnabled) {
+      for (const cmd of this.settings.commands) this.registerFilterCommand(cmd);
+    }
+    for (const noteType of this.settings.noteTypes) {
+      this.registerNoteTypeCommand(noteType);
+      if (noteType.enableFindCommand) this.registerFindCommand(noteType);
+    }
+    this.registerNewNoteCommand();
 
-    // ── Object link styling ─────────────────────────────────────────────────────
-    this.buildStyledObjectSet();
+    this.registerEditorSuggest(new NoteTypeSuggest(this.app, this));
 
-    this.previewPopup = new ObjectPreviewPopup(this);
+    // ── Note link styling ────────────────────────────────────────────────────────
+    this.buildStyledNoteSet();
+
+    this.previewPopup = new NotePreviewPopup(this);
     this.register(() => this.previewPopup.destroy());
 
     this.registerMarkdownPostProcessor((el) => {
       el.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
         const href     = (link.getAttribute('data-href') ?? '').split('#')[0].trim();
         const basename = href.includes('/') ? href.split('/').pop() ?? href : href;
-        if (this.styledObjectBasenames.has(href) || this.styledObjectBasenames.has(basename)) {
-          link.classList.add('ffc-obj-link');
+        if (this.styledNoteBasenames.has(href) || this.styledNoteBasenames.has(basename)) {
+          link.classList.add('ffc-note-link');
         }
-        if (this.previewObjectBasenames.has(href) || this.previewObjectBasenames.has(basename)) {
-          link.classList.add('ffc-obj-preview-link');
+        if (this.previewNoteBasenames.has(href) || this.previewNoteBasenames.has(basename)) {
+          link.classList.add('ffc-note-preview-link');
         }
-        const status = this.statusObjectMap.get(basename) ?? this.statusObjectMap.get(href);
+        const status = this.statusNoteMap.get(basename) ?? this.statusNoteMap.get(href);
         if (status) {
           const svg = statusSvg(status);
           if (svg) {
@@ -101,40 +105,40 @@ export class FilteredFileCommandsPlugin extends Plugin {
       });
     });
 
-    this.registerEditorExtension(buildObjectLinkViewPlugin(this));
+    this.registerEditorExtension(buildNoteLinkViewPlugin(this));
 
     this.registerEvent(
       this.app.metadataCache.on('resolved', () => {
-        this.buildStyledObjectSet();
-        this.refreshObjectLinkStyles();
+        this.buildStyledNoteSet();
+        this.refreshNoteLinkStyles();
       })
     );
 
-    // ── "Object from selection" context menu ────────────────────────────────────
+    // ── "Note from selection" context menu ───────────────────────────────────────
     this.registerEvent(
       this.app.workspace.on('editor-menu', (menu, editor) => {
         const selection = editor.getSelection()?.trim();
         if (!selection) return;
-        const types = this.settings.objectTypes;
+        const types = this.settings.noteTypes;
         if (types.length === 0) return;
 
         const from = editor.getCursor('from');
         const to   = editor.getCursor('to');
 
         menu.addItem((item) => {
-          item.setTitle('Object from selection').setIcon('box-select');
+          item.setTitle('Note from selection').setIcon('box-select');
           const submenu = (item as any).setSubmenu();
-          for (const objType of types) {
+          for (const noteType of types) {
             submenu.addItem((subItem: any) => {
-              subItem.setTitle(objType.name)
+              subItem.setTitle(noteType.name)
                 .onClick(() => {
-                  const current = this.settings.objectTypes.find((o) => o.id === objType.id);
-                  if (!current) { new Notice('Object type not found. Try reloading.'); return; }
-                  new NewObjectModal(
+                  const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
+                  if (!current) { new Notice('Note type not found. Try reloading.'); return; }
+                  new NewNoteModal(
                     this.app, current,
                     async (title, fv, desc) => {
                       editor.replaceRange(`[[${title}]]`, from, to);
-                      await this.createObject(current, title, fv, desc);
+                      await this.createNote(current, title, fv, desc);
                     },
                     selection,
                   ).open();
@@ -172,14 +176,14 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
     const container = view.containerEl as HTMLElement;
     const menuEl    = container.querySelector('.canvas-card-menu') as HTMLElement | null;
-    if (!menuEl || menuEl.querySelector('.ffc-canvas-object-btn')) return;
+    if (!menuEl || menuEl.querySelector('.ffc-canvas-note-btn')) return;
 
     const canvas = view.canvas as ObsidianCanvas;
 
     const btn = menuEl.createEl('div', {
-      cls: 'canvas-card-menu-button mod-draggable ffc-canvas-object-btn',
+      cls: 'canvas-card-menu-button mod-draggable ffc-canvas-note-btn',
     });
-    btn.setAttribute('aria-label', 'Add object card');
+    btn.setAttribute('aria-label', 'Add note card');
     btn.setAttribute('data-tooltip-position', 'top');
     const { setIcon } = require('obsidian');
     setIcon(btn, 'shapes');
@@ -240,7 +244,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
         btn.classList.remove('is-dragging');
 
         if (!dragging) {
-          new CanvasObjectSwitcher(this.app, this, canvas, null).open();
+          new CanvasNoteSwitcher(this.app, this, canvas, null).open();
           return;
         }
 
@@ -267,7 +271,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
           };
         }
 
-        new CanvasObjectSwitcher(this.app, this, canvas, pos).open();
+        new CanvasNoteSwitcher(this.app, this, canvas, pos).open();
       };
 
       document.addEventListener('mousemove', onMouseMove);
@@ -305,9 +309,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
       name: cmd.name,
       callback: () => {
         const current = this.settings.commands.find((c) => c.id === cmd.id);
-        if (!current) { new Notice('Objects: Command not found. Try reloading.'); return; }
+        if (!current) { new Notice('Note Types: Command not found. Try reloading.'); return; }
         const files = this.getFilteredFiles(current);
-        if (files.length === 0) { new Notice('Objects: No files match the current filters.'); return; }
+        if (files.length === 0) { new Notice('Note Types: No files match the current filters.'); return; }
         new FilteredFileModal(this.app, files).open();
       },
     });
@@ -330,17 +334,17 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
   }
 
-  getObjectTypeFiles(obj: ObjectType): TFile[] {
-    const filters  = obj.matchFilters ?? [];
-    const matchMode = obj.matchMode ?? 'all';
+  getNoteTypeFiles(noteType: NoteType): TFile[] {
+    const filters  = noteType.matchFilters ?? [];
+    const matchMode = noteType.matchMode ?? 'all';
     return this.app.vault.getMarkdownFiles().filter((file) => {
       if (filters.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const fm = (this.app.metadataCache.getFileCache(file) as any)?.frontmatter ?? {};
         const results = filters.map((f) => this.evaluateFilter(fm, f, file));
         return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
-      } else if (obj.saveFolder?.trim()) {
-        const prefix = obj.saveFolder.trim().replace(/\/$/, '') + '/';
+      } else if (noteType.saveFolder?.trim()) {
+        const prefix = noteType.saveFolder.trim().replace(/\/$/, '') + '/';
         return file.path.startsWith(prefix);
       }
       return false;
@@ -369,19 +373,19 @@ export class FilteredFileCommandsPlugin extends Plugin {
     }
   }
 
-  // ── Object type commands ──────────────────────────────────────────────────────
+  // ── Note type commands ────────────────────────────────────────────────────────
 
-  registerObjectTypeCommand(obj: ObjectType): void {
-    const cmdId = `ffc-objtype-${obj.commandSlug}`;
+  registerNoteTypeCommand(noteType: NoteType): void {
+    const cmdId = `ffc-notetype-${noteType.commandSlug}`;
     if (this.registeredCommandIds.has(cmdId)) return;
     const registered = this.addCommand({
       id: cmdId,
-      name: `Create new ${obj.name}`,
+      name: `Create new ${noteType.name}`,
       callback: () => {
-        const current = this.settings.objectTypes.find((o) => o.id === obj.id);
-        if (!current) { new Notice('Object type not found. Try reloading.'); return; }
-        new NewObjectModal(this.app, current, (title, fieldValues, description) =>
-          this.createObject(current, title, fieldValues, description)
+        const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
+        if (!current) { new Notice('Note type not found. Try reloading.'); return; }
+        new NewNoteModal(this.app, current, (title, fieldValues, description) =>
+          this.createNote(current, title, fieldValues, description)
         ).open();
       },
     });
@@ -389,17 +393,17 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.registeredCommandIds.add(cmdId);
   }
 
-  registerFindCommand(obj: ObjectType): void {
-    const cmdId = `ffc-objtype-${obj.commandSlug}-find`;
+  registerFindCommand(noteType: NoteType): void {
+    const cmdId = `ffc-notetype-${noteType.commandSlug}-find`;
     if (this.registeredCommandIds.has(cmdId)) return;
     const registered = this.addCommand({
       id: cmdId,
-      name: `Find ${obj.name}`,
+      name: `Find ${noteType.name}`,
       callback: () => {
-        const current = this.settings.objectTypes.find((o) => o.id === obj.id);
-        if (!current) { new Notice('Objects: Object type not found. Try reloading.'); return; }
-        const files = this.getObjectTypeFiles(current);
-        if (files.length === 0) { new Notice('Objects: No files match this object type.'); return; }
+        const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
+        if (!current) { new Notice('Note Types: Note type not found. Try reloading.'); return; }
+        const files = this.getNoteTypeFiles(current);
+        if (files.length === 0) { new Notice('Note Types: No files match this note type.'); return; }
         new FilteredFileModal(this.app, files, current.name).open();
       },
     });
@@ -407,35 +411,35 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.registeredCommandIds.add(cmdId);
   }
 
-  private registerNewObjectCommand(): void {
+  private registerNewNoteCommand(): void {
     this.addCommand({
-      id: 'ffc-new-object',
-      name: 'New object',
+      id: 'ffc-new-note',
+      name: 'New note',
       callback: () => {
-        const types = this.settings.objectTypes;
+        const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new Notice('No object types defined. Add one in the Objects settings.');
+          new Notice('No note types defined. Add one in the Note Types settings.');
           return;
         }
         if (types.length === 1) {
-          new NewObjectModal(this.app, types[0], (title, fv, desc) =>
-            this.createObject(types[0], title, fv, desc)
+          new NewNoteModal(this.app, types[0], (title, fv, desc) =>
+            this.createNote(types[0], title, fv, desc)
           ).open();
           return;
         }
-        new CombinedNewObjectModal(this.app, types, (objType, title, fv, desc) =>
-          this.createObject(objType, title, fv, desc)
+        new CombinedNewNoteModal(this.app, types, (noteType, title, fv, desc) =>
+          this.createNote(noteType, title, fv, desc)
         ).open();
       },
     });
 
     this.addCommand({
-      id: 'ffc-new-object-from-selection',
-      name: 'New object from selection',
+      id: 'ffc-new-note-from-selection',
+      name: 'New note from selection',
       editorCallback: (editor) => {
-        const types = this.settings.objectTypes;
+        const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new Notice('No object types defined. Add one in the Objects settings.');
+          new Notice('No note types defined. Add one in the Note Types settings.');
           return;
         }
         const selection = editor.getSelection()?.trim();
@@ -445,15 +449,15 @@ export class FilteredFileCommandsPlugin extends Plugin {
           editor.replaceRange(`[[${title}]]`, from, to);
         };
         if (types.length === 1) {
-          new NewObjectModal(this.app, types[0], async (title, fv, desc) => {
+          new NewNoteModal(this.app, types[0], async (title, fv, desc) => {
             await replaceWithLink(title);
-            await this.createObject(types[0], title, fv, desc);
+            await this.createNote(types[0], title, fv, desc);
           }, selection).open();
           return;
         }
-        new CombinedNewObjectModal(this.app, types, async (objType, title, fv, desc) => {
+        new CombinedNewNoteModal(this.app, types, async (noteType, title, fv, desc) => {
           await replaceWithLink(title);
-          await this.createObject(objType, title, fv, desc);
+          await this.createNote(noteType, title, fv, desc);
         }, selection).open();
       },
     });
@@ -462,22 +466,22 @@ export class FilteredFileCommandsPlugin extends Plugin {
     const ttPlugin = (this.app as any).plugins?.getPlugin?.('text-formatting-toolbar');
     if (ttPlugin?.api) {
       ttPlugin.api.addCommand({
-        id: 'filtered-file-commands:ffc-new-object-from-selection',
+        id: 'filtered-file-commands:ffc-new-note-from-selection',
         icon: 'box-select',
-        name: 'New object from selection',
+        name: 'New note from selection',
       });
     }
   }
 
   // ── File creation ─────────────────────────────────────────────────────────────
 
-  async createObject(
-    objType: ObjectType,
+  async createNote(
+    noteType: NoteType,
     title: string,
     fieldValues: Record<string, string> = {},
     description = '',
   ): Promise<void> {
-    const saveFolder = objType.saveFolder?.trim() ?? '';
+    const saveFolder = noteType.saveFolder?.trim() ?? '';
     const filePath   = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
 
     if (this.app.vault.getAbstractFileByPath(filePath)) {
@@ -486,12 +490,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
     }
 
     let content = '';
-    if (objType.templatePath) {
-      const tplFile = this.app.vault.getAbstractFileByPath(objType.templatePath);
+    if (noteType.templatePath) {
+      const tplFile = this.app.vault.getAbstractFileByPath(noteType.templatePath);
       if (tplFile instanceof TFile) {
         content = await this.app.vault.read(tplFile);
       } else {
-        new Notice(`Template not found: ${objType.templatePath}`);
+        new Notice(`Template not found: ${noteType.templatePath}`);
       }
     }
 
@@ -501,7 +505,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       .replace(/\{\{date\}\}/gi, now.toISOString().split('T')[0])
       .replace(/\{\{time\}\}/gi, now.toTimeString().split(' ')[0]);
 
-    content = this.injectFieldsIntoContent(content, objType, fieldValues);
+    content = this.injectFieldsIntoContent(content, noteType, fieldValues);
     if (description.trim()) {
       content = this.appendDescriptionToContent(content, description.trim());
     }
@@ -529,10 +533,10 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
   private injectFieldsIntoContent(
     content: string,
-    objType: ObjectType,
+    noteType: NoteType,
     fieldValues: Record<string, string>,
   ): string {
-    const fields = (objType.fields ?? []).filter((f) => f.key?.trim());
+    const fields = (noteType.fields ?? []).filter((f) => f.key?.trim());
     if (fields.length === 0) return content;
     for (const field of fields) {
       const raw = (fieldValues[field.key] ?? '').trim();
@@ -639,8 +643,15 @@ export class FilteredFileCommandsPlugin extends Plugin {
   // ── Persistence ───────────────────────────────────────────────────────────────
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()) as PluginSettings;
-    if (!this.settings.objectTypes)                  this.settings.objectTypes = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = ((await this.loadData()) ?? {}) as Record<string, any>;
+    if (raw.noteTypes === undefined && Array.isArray(raw.objectTypes)) {
+      raw.noteTypes = raw.objectTypes;
+    }
+    delete raw.objectTypes;
+
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw) as PluginSettings;
+    if (!this.settings.noteTypes)                     this.settings.noteTypes = [];
     if (this.settings.templatesFolder === undefined)  this.settings.templatesFolder = '';
     if (this.settings.triggerKey === undefined)       this.settings.triggerKey = '';
     if (!Array.isArray(this.settings.ffwSections))   this.settings.ffwSections = [];
@@ -653,11 +664,11 @@ export class FilteredFileCommandsPlugin extends Plugin {
     );
 
     const takenSlugs = new Set(
-      this.settings.objectTypes.filter((o) => o.commandSlug).map((o) => o.commandSlug)
+      this.settings.noteTypes.filter((o) => o.commandSlug).map((o) => o.commandSlug)
     );
 
     let needsSave = false;
-    for (const obj of this.settings.objectTypes) {
+    for (const obj of this.settings.noteTypes) {
       if (!obj.fields)                           { obj.fields = [];         needsSave = true; }
       if (!obj.matchFilters)                     { obj.matchFilters = [];   needsSave = true; }
       if (!obj.matchMode)                        { obj.matchMode = 'all';   needsSave = true; }
@@ -685,44 +696,44 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
   async saveSettings(): Promise<void> { await this.saveData(this.settings); }
 
-  // ── Object link styling ───────────────────────────────────────────────────────
+  // ── Note link styling ─────────────────────────────────────────────────────────
 
-  buildStyledObjectSet(): void {
-    this.styledObjectBasenames  = new Set();
-    this.styledObjectPaths      = new Set();
-    this.previewObjectBasenames = new Set();
-    this.previewObjectPaths     = new Set();
-    this.statusObjectMap        = new Map();
-    for (const objType of this.settings.objectTypes) {
-      const hasPreview = (objType.previewFields ?? []).length > 0;
-      if (!objType.styledLinks && !hasPreview && !objType.showStatusInLinks) continue;
-      for (const file of this.getObjectTypeFiles(objType)) {
-        if (objType.styledLinks) {
-          this.styledObjectBasenames.add(file.basename);
-          this.styledObjectPaths.add(file.path);
+  buildStyledNoteSet(): void {
+    this.styledNoteBasenames  = new Set();
+    this.styledNotePaths      = new Set();
+    this.previewNoteBasenames = new Set();
+    this.previewNotePaths     = new Set();
+    this.statusNoteMap        = new Map();
+    for (const noteType of this.settings.noteTypes) {
+      const hasPreview = (noteType.previewFields ?? []).length > 0;
+      if (!noteType.styledLinks && !hasPreview && !noteType.showStatusInLinks) continue;
+      for (const file of this.getNoteTypeFiles(noteType)) {
+        if (noteType.styledLinks) {
+          this.styledNoteBasenames.add(file.basename);
+          this.styledNotePaths.add(file.path);
         }
         if (hasPreview) {
-          this.previewObjectBasenames.add(file.basename);
-          this.previewObjectPaths.add(file.path);
+          this.previewNoteBasenames.add(file.basename);
+          this.previewNotePaths.add(file.path);
         }
-        if (objType.showStatusInLinks) {
+        if (noteType.showStatusInLinks) {
           const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.['status'];
           if (typeof raw === 'string' && VALID_STATUSES.has(raw)) {
-            this.statusObjectMap.set(file.basename, raw);
+            this.statusNoteMap.set(file.basename, raw);
           }
         }
       }
     }
   }
 
-  refreshObjectLinkStyles(): void {
+  refreshNoteLinkStyles(): void {
     document.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
       const href      = (link.getAttribute('data-href') ?? '').split('#')[0].trim();
       const basename  = href.includes('/') ? href.split('/').pop() ?? href : href;
-      const isStyled  = this.styledObjectBasenames.has(href)  || this.styledObjectBasenames.has(basename);
-      const isPreview = this.previewObjectBasenames.has(href)  || this.previewObjectBasenames.has(basename);
-      (link as HTMLElement).classList.toggle('ffc-obj-link',         isStyled);
-      (link as HTMLElement).classList.toggle('ffc-obj-preview-link', isPreview);
+      const isStyled  = this.styledNoteBasenames.has(href)  || this.styledNoteBasenames.has(basename);
+      const isPreview = this.previewNoteBasenames.has(href)  || this.previewNoteBasenames.has(basename);
+      (link as HTMLElement).classList.toggle('ffc-note-link',         isStyled);
+      (link as HTMLElement).classList.toggle('ffc-note-preview-link', isPreview);
     });
   }
 }

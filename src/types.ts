@@ -6,7 +6,7 @@ export interface FilterSpec {
   value: string;
 }
 
-export interface ObjectField {
+export interface NoteField {
   key: string;
   label: string;
   type: 'text' | 'list';
@@ -22,14 +22,14 @@ export interface CanvasField {
   label: string;
 }
 
-export interface ObjectType {
+export interface NoteType {
   id: string;
   commandSlug: string;
   name: string;
   description?: string;
   templatePath: string;
   saveFolder: string;
-  fields: ObjectField[];
+  fields: NoteField[];
   matchFilters: FilterSpec[];
   matchMode: 'all' | 'any';
   enableFindCommand: boolean;
@@ -100,7 +100,9 @@ export interface FfwSection {
 
 export interface PluginSettings {
   commands: CommandSpec[];
-  objectTypes: ObjectType[];
+  filteredCommandsEnabled: boolean;
+  filteredWidgetEnabled: boolean;
+  noteTypes: NoteType[];
   templatesFolder: string;
   triggerKey: string;
   ffwSections: FfwSection[];

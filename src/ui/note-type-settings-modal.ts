@@ -2,7 +2,7 @@ import { App, Modal, Setting } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { nameToCommandSlug } from '../utils/helpers.ts';
 
-export class ObjectTypeSettingsModal extends Modal {
+export class NoteTypeSettingsModal extends Modal {
   private plugin: FilteredFileCommandsPlugin;
   private index: number;
   private onDismiss: (() => void) | undefined;
@@ -19,31 +19,31 @@ export class ObjectTypeSettingsModal extends Modal {
   private _render(): void {
     const { contentEl } = this;
     contentEl.empty();
-    contentEl.addClass('ffc-objtype-modal');
+    contentEl.addClass('ffc-notetype-modal');
 
-    const obj = this.plugin.settings.objectTypes[this.index];
-    if (!obj) { contentEl.createEl('p', { text: 'Object type not found.' }); return; }
+    const obj = this.plugin.settings.noteTypes[this.index];
+    if (!obj) { contentEl.createEl('p', { text: 'Note type not found.' }); return; }
 
-    contentEl.createEl('h2', { text: obj.name || 'Object Type Settings', cls: 'ffc-modal-title' });
+    contentEl.createEl('h2', { text: obj.name || 'Note Type Settings', cls: 'ffc-modal-title' });
 
     // ── Name ──────────────────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Object name').setDesc('Creates a "Create new {name}" command in the palette.')
+    new Setting(contentEl).setName('Note type name').setDesc('Creates a "Create new {name}" command in the palette.')
       .addText((text) => text.setPlaceholder('e.g. Task').setValue(obj.name)
         .onChange(async (value) => {
           obj.name = value;
           await this.plugin.saveSettings();
-          const cmdId = `ffc-objtype-${obj.commandSlug}`;
+          const cmdId = `ffc-notetype-${obj.commandSlug}`;
           const refs = this.plugin.commandRefs;
           if (refs[cmdId]) refs[cmdId].name = `Create new ${value}`;
           const findCmdId = `${cmdId}-find`;
           if (refs[findCmdId]) refs[findCmdId].name = `Find ${value}`;
           const titleEl = contentEl.querySelector('.ffc-modal-title');
-          if (titleEl) titleEl.textContent = value || 'Object Type Settings';
+          if (titleEl) titleEl.textContent = value || 'Note Type Settings';
         })
       );
 
     // ── Description ───────────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Description').setDesc('Short description shown beneath the object type name in the settings list.')
+    new Setting(contentEl).setName('Description').setDesc('Short description shown beneath the note type name in the settings list.')
       .addText((text) => text.setPlaceholder('e.g. Tracks actionable to-dos').setValue(obj.description || '')
         .onChange(async (value) => {
           obj.description = value;
@@ -58,9 +58,9 @@ export class ObjectTypeSettingsModal extends Modal {
       });
     }
 
-    // ── Object Detection ──────────────────────────────────────────────────────
+    // ── Note Detection ────────────────────────────────────────────────────────
     const detectionSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    detectionSection.createEl('p', { text: 'Object Detection', cls: 'ffc-filters-title' });
+    detectionSection.createEl('p', { text: 'Note Detection', cls: 'ffc-filters-title' });
     detectionSection.createEl('p', {
       text: 'Filters that identify existing files of this type. Used by the trigger menu and the "Find" command. If no filters are set, files in the Save Folder are used as a fallback.',
       cls: 'ffc-hint',
@@ -79,7 +79,7 @@ export class ObjectTypeSettingsModal extends Modal {
       detectionSection.createEl('p', { text: 'No filters — save folder will be used as a fallback.', cls: 'ffc-hint' });
     }
     for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
-      this._renderObjectMatchFilter(detectionSection, fi);
+      this._renderNoteMatchFilter(detectionSection, fi);
     }
     new Setting(detectionSection).addButton((btn) =>
       btn.setButtonText('＋ Add Detection Filter').onClick(async () => {
@@ -111,15 +111,15 @@ export class ObjectTypeSettingsModal extends Modal {
       );
 
     new Setting(detectionSection)
-      .setName('Style object links')
+      .setName('Style note links')
       .setDesc('When enabled, inline links to files of this type will have their underline removed and a background fill applied.')
       .addToggle((toggle) =>
         toggle.setValue(obj.styledLinks ?? false)
           .onChange(async (value) => {
             obj.styledLinks = value;
             await this.plugin.saveSettings();
-            this.plugin.buildStyledObjectSet();
-            this.plugin.refreshObjectLinkStyles();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
           })
       );
 
@@ -131,15 +131,15 @@ export class ObjectTypeSettingsModal extends Modal {
           .onChange(async (value) => {
             obj.showStatusInLinks = value;
             await this.plugin.saveSettings();
-            this.plugin.buildStyledObjectSet();
-            this.plugin.refreshObjectLinkStyles();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
           })
       );
 
     // ── Template & Save Folder ────────────────────────────────────────────────
     const templateFiles = this.plugin.getTemplateFiles();
     if (templateFiles.length > 0) {
-      new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new object of this type.')
+      new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
         .addDropdown((dd) => {
           dd.addOption('', '— None —');
           for (const f of templateFiles) dd.addOption(f.path, f.basename);
@@ -167,7 +167,7 @@ export class ObjectTypeSettingsModal extends Modal {
     });
 
     for (let fi = 0; fi < (obj.fields ?? []).length; fi++) {
-      this._renderObjectField(fieldsSection, fi);
+      this._renderNoteField(fieldsSection, fi);
     }
     new Setting(fieldsSection).addButton((btn) =>
       btn.setButtonText('＋ Add Field').onClick(async () => {
@@ -182,7 +182,7 @@ export class ObjectTypeSettingsModal extends Modal {
     const previewSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
     previewSection.createEl('p', { text: 'Preview Fields', cls: 'ffc-filters-title' });
     previewSection.createEl('p', {
-      text: 'Frontmatter keys shown when hovering over a link to an object of this type.',
+      text: 'Frontmatter keys shown when hovering over a link to a note of this type.',
       cls: 'ffc-hint',
     });
 
@@ -210,7 +210,7 @@ export class ObjectTypeSettingsModal extends Modal {
     const canvasSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
     canvasSection.createEl('p', { text: 'Canvas Card Fields', cls: 'ffc-filters-title' });
     canvasSection.createEl('p', {
-      text: 'Frontmatter keys shown on canvas cards for objects of this type.',
+      text: 'Frontmatter keys shown on canvas cards for notes of this type.',
       cls: 'ffc-hint',
     });
 
@@ -252,8 +252,8 @@ export class ObjectTypeSettingsModal extends Modal {
       );
   }
 
-  private _renderObjectMatchFilter(container: HTMLElement, filterIndex: number): void {
-    const obj    = this.plugin.settings.objectTypes[this.index];
+  private _renderNoteMatchFilter(container: HTMLElement, filterIndex: number): void {
+    const obj    = this.plugin.settings.noteTypes[this.index];
     const filter = obj.matchFilters[filterIndex];
     const row    = container.createDiv({ cls: 'ffc-filter-row' });
 
@@ -298,8 +298,8 @@ export class ObjectTypeSettingsModal extends Modal {
     };
   }
 
-  private _renderObjectField(container: HTMLElement, fieldIndex: number): void {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+  private _renderNoteField(container: HTMLElement, fieldIndex: number): void {
+    const obj   = this.plugin.settings.noteTypes[this.index];
     const field = obj.fields[fieldIndex];
     const row   = container.createDiv({ cls: 'ffc-filter-row' });
 
@@ -329,7 +329,7 @@ export class ObjectTypeSettingsModal extends Modal {
   }
 
   private _renderPreviewField(container: HTMLElement, fieldIndex: number): void {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+    const obj   = this.plugin.settings.noteTypes[this.index];
     const field = obj.previewFields[fieldIndex];
     const row   = container.createDiv({ cls: 'ffc-filter-row' });
 
@@ -344,21 +344,21 @@ export class ObjectTypeSettingsModal extends Modal {
     keyInput.addEventListener('change', async () => {
       field.key = keyInput.value.trim();
       await this.plugin.saveSettings();
-      this.plugin.buildStyledObjectSet();
-      this.plugin.refreshObjectLinkStyles();
+      this.plugin.buildStyledNoteSet();
+      this.plugin.refreshNoteLinkStyles();
     });
 
     row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
       obj.previewFields.splice(fieldIndex, 1);
       await this.plugin.saveSettings();
-      this.plugin.buildStyledObjectSet();
-      this.plugin.refreshObjectLinkStyles();
+      this.plugin.buildStyledNoteSet();
+      this.plugin.refreshNoteLinkStyles();
       this._render();
     };
   }
 
   private _renderCanvasField(container: HTMLElement, fieldIndex: number): void {
-    const obj   = this.plugin.settings.objectTypes[this.index];
+    const obj   = this.plugin.settings.noteTypes[this.index];
     const field = obj.canvasFields[fieldIndex];
     const row   = container.createDiv({ cls: 'ffc-filter-row' });
 

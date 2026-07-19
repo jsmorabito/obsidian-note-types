@@ -1,7 +1,7 @@
 import { App, Modal } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 
-export class ObjectTypeDeleteModal extends Modal {
+export class NoteTypeDeleteModal extends Modal {
   private plugin: FilteredFileCommandsPlugin;
   private index: number;
   private onDismiss: (() => void) | undefined;
@@ -16,11 +16,11 @@ export class ObjectTypeDeleteModal extends Modal {
   onOpen(): void {
     const { contentEl } = this;
     contentEl.addClass('ffc-confirm-modal');
-    const obj = this.plugin.settings.objectTypes[this.index];
+    const obj = this.plugin.settings.noteTypes[this.index];
 
-    contentEl.createEl('h2', { text: 'Delete Object Type?' });
+    contentEl.createEl('h2', { text: 'Delete Note Type?' });
     contentEl.createEl('p', {
-      text: `Are you sure you want to delete "${obj?.name || 'this object type'}"? This will remove it from your settings. Existing files will not be affected.`,
+      text: `Are you sure you want to delete "${obj?.name || 'this note type'}"? This will remove it from your settings. Existing files will not be affected.`,
       cls: 'ffc-confirm-desc',
     });
 
@@ -32,7 +32,7 @@ export class ObjectTypeDeleteModal extends Modal {
 
     const deleteBtn = btnRow.createEl('button', { text: 'Delete', cls: 'mod-warning' });
     deleteBtn.onclick = async () => {
-      this.plugin.settings.objectTypes.splice(this.index, 1);
+      this.plugin.settings.noteTypes.splice(this.index, 1);
       await this.plugin.saveSettings();
       this.close();
     };
