@@ -18,7 +18,7 @@ export class FilteredCommandDeleteModal extends Modal {
     contentEl.addClass('ffc-confirm-modal');
     const cmd = this.plugin.settings.commands[this.index];
 
-    contentEl.createEl('h2', { text: 'Delete Command?' });
+    contentEl.createEl('h2', { text: 'Delete command?' });
     contentEl.createEl('p', {
       text: `Are you sure you want to delete "${cmd?.name || 'this command'}"? This will remove it from your settings.`,
       cls: 'ffc-confirm-desc',

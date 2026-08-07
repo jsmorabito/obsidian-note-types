@@ -1,6 +1,18 @@
 import { App, setIcon } from 'obsidian';
 
 /**
+ * Safely stringify a frontmatter value for display, avoiding "[object Object]"
+ * for non-primitive values. Duplicated from utils/helpers.ts to avoid a
+ * circular import (helpers.ts imports this file for FrontmatterValueSuggest).
+ */
+function stringifyFrontmatterValue(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch { return ''; }
+}
+
+/**
  * Custom lightweight autocomplete dropdown for frontmatter fields.
  * Built from scratch instead of AbstractInputSuggest so we have full control
  * over keyboard/mouse handling inside Obsidian modals.
@@ -27,7 +39,7 @@ export class FrontmatterValueSuggest {
 
     this._onInput   = () => this.refresh();
     this._onFocus   = () => this.refresh();
-    this._onBlur    = () => setTimeout(() => this.close(), 150);
+    this._onBlur    = () => window.setTimeout(() => this.close(), 150);
     this._onKeydown = (e) => this.handleKeydown(e);
 
     inputEl.addEventListener('input',   this._onInput);
@@ -41,18 +53,22 @@ export class FrontmatterValueSuggest {
   private getVaultValues(): string[] {
     const values = new Set<string>();
     if (this.key === 'tags' || this.key === 'tag') {
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
+         getTags() isn't part of the public MetadataCache typings. */
       const tags = (this.app.metadataCache as any).getTags() ?? {};
       for (const tag of Object.keys(tags)) {
         values.add(tag.startsWith('#') ? tag.slice(1) : tag);
       }
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
+         End of the getTags() reflection block. */
     }
     for (const file of this.app.vault.getMarkdownFiles()) {
-      const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.[this.key];
+      const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[this.key];
       if (raw == null) continue;
       if (Array.isArray(raw)) {
-        (raw as unknown[]).forEach((v) => { if (v != null) values.add(String(v).trim()); });
+        (raw as unknown[]).forEach((v) => { if (v != null) values.add(stringifyFrontmatterValue(v).trim()); });
       } else {
-        const s = String(raw).trim();
+        const s = stringifyFrontmatterValue(raw).trim();
         if (s) values.add(s);
       }
     }
@@ -128,7 +144,7 @@ export class FrontmatterValueSuggest {
     this.selectedIndex = -1;
 
     if (!this.dropdown) {
-      this.dropdown = document.createElement('div');
+      this.dropdown = createDiv();
       this.dropdown.className = 'suggestion-container ffc-suggest-dropdown';
       document.body.appendChild(this.dropdown);
     }

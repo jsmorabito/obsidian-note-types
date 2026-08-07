@@ -1,4 +1,4 @@
-import { App, TFile, getAllTags } from 'obsidian';
+import { App, CachedMetadata, TFile, getAllTags, setIcon } from 'obsidian';
 import {
   FfwFilter, FfwTagFilter, FfwFrontmatterFilter, FfwPathFilter,
   FfwNameFilter, FfwSection, FfwSort, FfwFilterType,
@@ -75,10 +75,12 @@ export function ffwFuzzyMatch(query: string, str: string): boolean {
   return n === q.length;
 }
 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
+   Reflects into the third-party "Iconic" community plugin's internals, which publishes no types
+   and whose shape can change without notice; every access below is already defensively guarded. */
 /** Read a file's icon/color from the Iconic plugin if installed. */
 export function ffwGetIconicIcon(app: App, file: TFile): { icon: string; color?: string | null } | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const plugins = (app as any).plugins?.plugins;
     if (!plugins) return null;
     const iconic = plugins.iconic;
@@ -107,10 +109,11 @@ export function ffwGetIconicIcon(app: App, file: TFile): { icon: string; color?:
   } catch { /* ignore */ }
   return null;
 }
+/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
+   End of the Iconic-plugin reflection block. */
 
 /** Render an icon string (Lucide id or emoji) into an element, with optional color. */
 export function ffwSetIconEl(el: HTMLElement, icon: string, color: string | null | undefined): void {
-  const { setIcon } = require('obsidian');
   if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon)) {
     setIcon(el, icon);
   } else {
@@ -135,8 +138,7 @@ export function ffwNormalizeTag(tag: string): string {
 
 // ─── Per-filter evaluators ────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function ffwEvalTagFilter(cache: any, filter: FfwTagFilter): boolean {
+export function ffwEvalTagFilter(cache: CachedMetadata | null, filter: FfwTagFilter): boolean {
   const tag = ffwNormalizeTag(filter.tag);
   if (!tag) return true;
   const allTags = cache ? (getAllTags(cache) ?? []).map(ffwNormalizeTag) : [];
@@ -144,12 +146,11 @@ export function ffwEvalTagFilter(cache: any, filter: FfwTagFilter): boolean {
   return filter.include ? has : !has;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function ffwEvalFrontmatterFilter(cache: any, filter: FfwFrontmatterFilter): boolean {
+export function ffwEvalFrontmatterFilter(cache: CachedMetadata | null, filter: FfwFrontmatterFilter): boolean {
   if (!filter.key) return true;
   const fm = cache?.frontmatter;
   if (!fm) return filter.comparison === 'not-equals';
-  const raw = fm[filter.key];
+  const raw: unknown = fm[filter.key];
   if (filter.comparison === 'exists') return raw != null && raw !== '';
   if (raw == null) return filter.comparison === 'not-equals';
   const needle = filter.value.trim().toLowerCase();
@@ -195,8 +196,7 @@ export function ffwEvalNameFilter(file: TFile, filter: FfwNameFilter): boolean {
   return filter.negate ? !matches : matches;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function ffwApplyFilter(file: TFile, cache: any, filter: FfwFilter): boolean {
+export function ffwApplyFilter(file: TFile, cache: CachedMetadata | null, filter: FfwFilter): boolean {
   switch (filter.type) {
     case 'tag':         return ffwEvalTagFilter(cache, filter);
     case 'frontmatter': return ffwEvalFrontmatterFilter(cache, filter);
@@ -213,10 +213,9 @@ export function ffwGetFrontmatterSortValue(
   file: TFile,
   key: string,
 ): string | number | undefined {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fm = (app.metadataCache.getFileCache(file) as any)?.frontmatter;
+  const fm = app.metadataCache.getFileCache(file)?.frontmatter;
   if (!fm) return undefined;
-  const val = fm[key];
+  const val: unknown = fm[key];
   if (val == null || val === '') return undefined;
   return typeof val === 'number' || typeof val === 'string'
     ? val

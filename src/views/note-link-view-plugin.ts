@@ -4,12 +4,12 @@ import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { statusToClass, statusSvg } from '../utils/status-svg.ts';
 
 class StatusIconWidget extends WidgetType {
-  constructor(private readonly cls: string, private readonly svg: string) { super(); }
+  constructor(private readonly cls: string, private readonly svg: SVGElement) { super(); }
 
   toDOM(): HTMLElement {
-    const span = document.createElement('span');
+    const span = createSpan();
     span.className = `ffc-status-icon ${this.cls}`;
-    span.innerHTML = this.svg;
+    span.appendChild(this.svg);
     return span;
   }
 

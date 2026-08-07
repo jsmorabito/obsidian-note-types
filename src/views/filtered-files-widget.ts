@@ -81,7 +81,7 @@ export class FilteredFilesWidgetView extends ItemView {
     sectionEl.addEventListener('dragstart', (e) => this.handleDragStart(e, section.id));
     sectionEl.addEventListener('dragover',  (e) => this.handleDragOver(e, sectionEl));
     sectionEl.addEventListener('dragleave', ()  => sectionEl.removeClass('is-drag-over'));
-    sectionEl.addEventListener('drop',      (e) => this.handleDrop(e, section.id, sectionEl));
+    sectionEl.addEventListener('drop',      (e) => void this.handleDrop(e, section.id, sectionEl));
     sectionEl.addEventListener('dragend',   ()  => this.clearDragState());
 
     const header = sectionEl.createDiv({ cls: 'ffw-section-header' });
@@ -93,15 +93,15 @@ export class FilteredFilesWidgetView extends ItemView {
     const collapseToggle = header.createSpan({ cls: 'ffw-collapse-toggle' });
     setIcon(collapseToggle, section.collapsed ? 'chevron-right' : 'chevron-down');
     collapseToggle.setAttr('aria-label', section.collapsed ? 'Expand section' : 'Collapse section');
-    collapseToggle.addEventListener('click', (e) => { e.stopPropagation(); this.toggleCollapse(section); });
+    collapseToggle.addEventListener('click', (e) => { e.stopPropagation(); void this.toggleCollapse(section); });
 
     const titleWrap = header.createDiv({ cls: 'ffw-section-title-wrap' });
-    titleWrap.createEl('div', { cls: 'ffw-section-title', text: section.title });
-    titleWrap.createEl('div', {
+    titleWrap.createDiv({ cls: 'ffw-section-title', text: section.title });
+    titleWrap.createDiv({
       cls:  'ffw-section-meta',
       text: `${section.filters.length} filter${section.filters.length === 1 ? '' : 's'} · ${ffwSortLabel(section.sort)}`,
     });
-    titleWrap.addEventListener('click', () => this.toggleCollapse(section));
+    titleWrap.addEventListener('click', () => void this.toggleCollapse(section));
 
     const controls = header.createDiv({ cls: 'ffw-section-controls' });
     this.addIconButton(controls, 'more-vertical', 'More actions', (e) => this.openSectionMenu(section, e));
@@ -152,7 +152,7 @@ export class FilteredFilesWidgetView extends ItemView {
     if (folder) labelEl.createDiv({ cls: 'ffw-file-path', text: folder });
 
     row.addEventListener('click', (e) => {
-      this.app.workspace.openLinkText(file.path, '', e.ctrlKey || e.metaKey);
+      void this.app.workspace.openLinkText(file.path, '', e.ctrlKey || e.metaKey);
     });
 
     row.addEventListener('contextmenu', (e) => {
@@ -164,12 +164,15 @@ export class FilteredFilesWidgetView extends ItemView {
         .onClick(() => this.app.workspace.openLinkText(file.path, '', true)));
       menu.addItem((item) => item.setTitle('Reveal in file explorer').setIcon('folder')
         .onClick(() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+             Core plugin internals (app.internalPlugins) aren't part of the public Obsidian API. */
           const fe   = (this.app as any).internalPlugins?.getPluginById?.('file-explorer');
           const inst = fe?.instance;
           if (inst?.revealInFolder) {
             try { inst.revealInFolder(file); return; } catch { /* ignore */ }
           }
+          /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+             End of the internalPlugins reflection block. */
           new Notice('Could not reveal file in the file explorer.');
         }));
       menu.showAtMouseEvent(e);
@@ -195,7 +198,7 @@ export class FilteredFilesWidgetView extends ItemView {
   private openAddModal(): void {
     new FfwSectionEditModal(this.app, null, (section) => {
       this.plugin.settings.ffwSections.push(section);
-      this.persistAndRender();
+      void this.persistAndRender();
     }).open();
   }
 
@@ -204,7 +207,7 @@ export class FilteredFilesWidgetView extends ItemView {
       const idx = this.plugin.settings.ffwSections.findIndex((s) => s.id === section.id);
       if (idx >= 0) {
         this.plugin.settings.ffwSections[idx] = updated;
-        this.persistAndRender();
+        void this.persistAndRender();
       }
     }).open();
   }

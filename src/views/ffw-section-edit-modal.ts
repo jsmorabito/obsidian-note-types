@@ -1,7 +1,7 @@
 import { App, Modal, Notice, Setting, ButtonComponent } from 'obsidian';
 import {
   FfwSection, FfwFilter, FfwTagFilter, FfwFrontmatterFilter,
-  FfwPathFilter, FfwNameFilter, FfwSort,
+  FfwPathFilter, FfwNameFilter,
 } from '../types.ts';
 import {
   ffwNewSectionId, ffwDefaultFilter, ffwDefaultSort,

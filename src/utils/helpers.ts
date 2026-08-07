@@ -3,6 +3,18 @@ import { NoteType } from '../types.ts';
 import { FrontmatterValueSuggest } from '../ui/frontmatter-value-suggest.ts';
 
 /**
+ * Safely stringify a frontmatter value for display. Unlike a bare `String(v)`,
+ * this avoids rendering non-primitive values (arrays/objects from malformed
+ * YAML) as the useless "[object Object]".
+ */
+export function stringifyFrontmatterValue(v: unknown): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try { return JSON.stringify(v); } catch { return ''; }
+}
+
+/**
  * Convert a note type name to a stable command slug.
  * e.g. "My Task" → "my-task", "  Hello World! " → "hello-world"
  */
@@ -21,18 +33,22 @@ export function nameToCommandSlug(name: string): string {
 export function getVaultValuesForKey(app: App, key: string): string[] {
   const values = new Set<string>();
   if (key === 'tags' || key === 'tag') {
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
+       getTags() isn't part of the public MetadataCache typings. */
     const tags = (app.metadataCache as any).getTags() ?? {};
     for (const tag of Object.keys(tags)) {
       values.add(tag.startsWith('#') ? tag.slice(1) : tag);
     }
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
+       End of the getTags() reflection block. */
   }
   for (const file of app.vault.getMarkdownFiles()) {
-    const raw = app.metadataCache.getFileCache(file)?.frontmatter?.[key];
+    const raw: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.[key];
     if (raw == null) continue;
     if (Array.isArray(raw)) {
-      (raw as unknown[]).forEach((v) => { if (v != null) values.add(String(v).trim()); });
+      (raw as unknown[]).forEach((v) => { if (v != null) values.add(stringifyFrontmatterValue(v).trim()); });
     } else {
-      const s = String(raw).trim();
+      const s = stringifyFrontmatterValue(raw).trim();
       if (s) values.add(s);
     }
   }

@@ -419,14 +419,25 @@
    Styled to match Obsidian's own canvas drag-ghost: rounded card outline
    with a semi-transparent accent fill and shadow. */
 .ffc-canvas-drop-ghost {
+  position: fixed;
+  display: none;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  width: var(--ffc-ghost-w);
+  height: var(--ffc-ghost-h);
+  left: var(--ffc-ghost-x, 0);
+  top: var(--ffc-ghost-y, 0);
   border-radius: var(--radius-l);
   border: 2px solid var(--interactive-accent);
   background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary) 90%);
   box-shadow: var(--shadow-l);
   opacity: 0.9;
-  pointer-events: none;
   /* z-index sits above canvas nodes but below Obsidian modals */
   z-index: var(--layer-notice, 200);
+}
+
+.ffc-canvas-drop-ghost.is-visible {
+  display: block;
 }
 
 
@@ -742,4 +753,9 @@
   display: block;
   width: 14px;
   height: 14px;
+}
+
+.ffc-notice-link {
+  text-decoration: underline;
+  cursor: pointer;
 }
