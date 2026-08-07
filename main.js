@@ -896,7 +896,7 @@ var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
     );
     containerEl.createEl("hr", { cls: "ffc-divider" });
     const objTypesHeader = containerEl.createDiv({ cls: "ffc-section-header" });
-    new import_obsidian7.Setting(objTypesHeader).setName("Note type definitions").setHeading();
+    new import_obsidian7.Setting(objTypesHeader).setName("Definitions").setHeading();
     const addObjTypeBtn = objTypesHeader.createEl("button", {
       cls: "clickable-icon ffc-btn-add",
       attr: { title: "Add note type", "aria-label": "Add note type" }
