@@ -36,15 +36,12 @@ export class MyPluginSettingTab extends PluginSettingTab {
     this.filteredCmdsSectionEl = undefined;
     this.filteredWidgetSectionEl = undefined;
 
-    // ── General ───────────────────────────────────────────────────────────────
-    containerEl.createEl('h2', { text: 'General' });
-
     new Setting(containerEl)
       .setName('Trigger key')
       .setDesc('Character that opens the inline note picker while editing (e.g. "@"). Leave blank to disable.')
       .addText((text) =>
         text
-          .setPlaceholder('e.g. @')
+          .setPlaceholder('E.g. @')
           .setValue(this.plugin.settings.triggerKey || '')
           .onChange(async (value) => {
             this.plugin.settings.triggerKey = value.trim().slice(0, 1);
@@ -68,7 +65,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
       .setDesc('Create palette commands that open a fuzzy file picker filtered by frontmatter.');
     if (this.plugin.settings.filteredCommandsEnabled) {
       filteredCmdsSetting.addExtraButton((btn) =>
-        btn.setIcon('arrow-down').setTooltip('Jump to Filtered File Commands').onClick(() => {
+        btn.setIcon('arrow-down').setTooltip('Jump to filtered file commands').onClick(() => {
           this.filteredCmdsSectionEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         })
       );
@@ -88,7 +85,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
       .setDesc('A sidebar panel that shows lists of files matching configurable filter rules.');
     if (this.plugin.settings.filteredWidgetEnabled) {
       filteredWidgetSetting.addExtraButton((btn) =>
-        btn.setIcon('arrow-down').setTooltip('Jump to Filtered Files Widget').onClick(() => {
+        btn.setIcon('arrow-down').setTooltip('Jump to filtered files widget').onClick(() => {
           this.filteredWidgetSectionEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         })
       );
@@ -107,7 +104,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
 
     // ── Note Types ────────────────────────────────────────────────────────────
     const objTypesHeader = containerEl.createDiv({ cls: 'ffc-section-header' });
-    objTypesHeader.createEl('h2', { text: 'Note Types', cls: 'ffc-section-header-title' });
+    new Setting(objTypesHeader).setName('Definitions').setHeading();
     const addObjTypeBtn = objTypesHeader.createEl('button', {
       cls: 'clickable-icon ffc-btn-add',
       attr: { title: 'Add note type', 'aria-label': 'Add note type' },
@@ -145,7 +142,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
       this.filteredCmdsSectionEl = containerEl.createDiv();
 
       const filteredCmdsHeader = this.filteredCmdsSectionEl.createDiv({ cls: 'ffc-section-header' });
-      filteredCmdsHeader.createEl('h2', { text: 'Filtered File Commands', cls: 'ffc-section-header-title' });
+      new Setting(filteredCmdsHeader).setName('Filtered file commands').setHeading();
       const addCmdBtn = filteredCmdsHeader.createEl('button', {
         cls: 'clickable-icon ffc-btn-add',
         attr: { title: 'Add filtered command', 'aria-label': 'Add filtered command' },
@@ -174,20 +171,20 @@ export class MyPluginSettingTab extends PluginSettingTab {
     // ── Filtered Files Widget ─────────────────────────────────────────────────
     if (this.plugin.settings.filteredWidgetEnabled) {
       this.filteredWidgetSectionEl = containerEl.createDiv();
-      this.filteredWidgetSectionEl.createEl('h2', { text: 'Filtered Files Widget' });
+      new Setting(this.filteredWidgetSectionEl).setName('Filtered files widget').setHeading();
 
       new Setting(this.filteredWidgetSectionEl)
         .setName('Open the widget')
         .setDesc('Reveal the filtered files widget in the left sidebar.')
         .addButton((btn) => btn.setButtonText('Open widget').setCta().onClick(() => {
-          this.plugin.activateWidgetView();
+          void this.plugin.activateWidgetView();
         }));
 
       new Setting(this.filteredWidgetSectionEl)
         .setName('Display name frontmatter key')
         .setDesc('Show a frontmatter value instead of the filename in the widget. Enter the key you use (e.g. "title"). Leave blank to use the filename.')
         .addText((text) => text
-          .setPlaceholder('e.g. title')
+          .setPlaceholder('E.g. title')
           .setValue(this.plugin.settings.ffwDisplayNameKey)
           .onChange(async (v) => {
             this.plugin.settings.ffwDisplayNameKey = v.trim();
@@ -219,10 +216,10 @@ export class MyPluginSettingTab extends PluginSettingTab {
     };
 
     const info = row.createDiv({ cls: 'ffc-item-row-info' });
-    info.createEl('div', { text: cmd.name || 'Unnamed', cls: 'ffc-item-row-name' });
+    info.createDiv({ text: cmd.name || 'Unnamed', cls: 'ffc-item-row-name' });
     const filterCount = cmd.filters.length;
     const desc = `${filterCount} filter${filterCount === 1 ? '' : 's'}${cmd.fileTypes ? ` · ${cmd.fileTypes}` : ''}`;
-    info.createEl('div', { text: desc, cls: 'ffc-item-row-desc' });
+    info.createDiv({ text: desc, cls: 'ffc-item-row-desc' });
 
     const actions = row.createDiv({ cls: 'ffc-item-row-actions' });
 
@@ -251,9 +248,9 @@ export class MyPluginSettingTab extends PluginSettingTab {
     };
 
     const info = row.createDiv({ cls: 'ffc-item-row-info' });
-    info.createEl('div', { text: obj.name || 'Unnamed', cls: 'ffc-item-row-name' });
+    info.createDiv({ text: obj.name || 'Unnamed', cls: 'ffc-item-row-name' });
     if (obj.description) {
-      info.createEl('div', { text: obj.description, cls: 'ffc-item-row-desc' });
+      info.createDiv({ text: obj.description, cls: 'ffc-item-row-desc' });
     }
 
     const actions = row.createDiv({ cls: 'ffc-item-row-actions' });

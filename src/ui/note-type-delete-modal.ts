@@ -18,7 +18,7 @@ export class NoteTypeDeleteModal extends Modal {
     contentEl.addClass('ffc-confirm-modal');
     const obj = this.plugin.settings.noteTypes[this.index];
 
-    contentEl.createEl('h2', { text: 'Delete Note Type?' });
+    contentEl.createEl('h2', { text: 'Delete note type?' });
     contentEl.createEl('p', {
       text: `Are you sure you want to delete "${obj?.name || 'this note type'}"? This will remove it from your settings. Existing files will not be affected.`,
       cls: 'ffc-confirm-desc',

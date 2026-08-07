@@ -1,7 +1,7 @@
-import { Notice, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { Notice, Plugin, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
 import { PluginSettings, NoteType, CommandSpec } from './types.ts';
-import { nameToCommandSlug } from './utils/helpers.ts';
+import { nameToCommandSlug, stringifyFrontmatterValue } from './utils/helpers.ts';
 import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
 import { FilteredFileModal } from './ui/filtered-file-modal.ts';
@@ -96,9 +96,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
         if (status) {
           const svg = statusSvg(status);
           if (svg) {
-            const span = document.createElement('span');
+            const span = createSpan();
             span.className = 'ffc-status-icon';
-            span.innerHTML = svg;
+            span.appendChild(svg);
             link.prepend(span);
           }
         }
@@ -125,6 +125,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
         const from = editor.getCursor('from');
         const to   = editor.getCursor('to');
 
+        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+           `setSubmenu` isn't part of the public Obsidian Menu typings. */
         menu.addItem((item) => {
           item.setTitle('Note from selection').setIcon('box-select');
           const submenu = (item as any).setSubmenu();
@@ -146,6 +148,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
             });
           }
         });
+        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+           End of the Menu.setSubmenu reflection block. */
       })
     );
 
@@ -153,12 +157,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.injectCanvasButtons();
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', () => {
-        setTimeout(() => this.injectCanvasButtons(), 50);
+        window.setTimeout(() => this.injectCanvasButtons(), 50);
       })
     );
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
-        setTimeout(() => this.injectCanvasButtons(), 50);
+        window.setTimeout(() => this.injectCanvasButtons(), 50);
       })
     );
   }
@@ -170,22 +174,24 @@ export class FilteredFileCommandsPlugin extends Plugin {
   }
 
   private _injectIntoCanvasLeaf(leaf: WorkspaceLeaf): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- WorkspaceLeaf.view has no canvas-specific public type.
     const view = leaf?.view as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- see above.
     if (view?.getViewType?.() !== 'canvas') return;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
     const container = view.containerEl as HTMLElement;
-    const menuEl    = container.querySelector('.canvas-card-menu') as HTMLElement | null;
+    const menuEl    = container.querySelector('.canvas-card-menu');
     if (!menuEl || menuEl.querySelector('.ffc-canvas-note-btn')) return;
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
     const canvas = view.canvas as ObsidianCanvas;
 
-    const btn = menuEl.createEl('div', {
+    const btn = menuEl.createDiv({
       cls: 'canvas-card-menu-button mod-draggable ffc-canvas-note-btn',
     });
     btn.setAttribute('aria-label', 'Add note card');
     btn.setAttribute('data-tooltip-position', 'top');
-    const { setIcon } = require('obsidian');
     setIcon(btn, 'shapes');
 
     const wrapperEl = canvas.wrapperEl ?? canvas.canvasEl ?? container;
@@ -212,12 +218,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
       const GHOST_W = CARD_W * zoom;
       const GHOST_H = CARD_H * zoom;
 
-      const ghost = document.body.createEl('div', { cls: 'ffc-canvas-drop-ghost' });
+      const ghost = document.body.createDiv({ cls: 'ffc-canvas-drop-ghost' });
       ghost.setAttribute('aria-hidden', 'true');
-      ghost.style.cssText =
-        `width:${GHOST_W}px;height:${GHOST_H}px;` +
-        `position:fixed;pointer-events:none;display:none;` +
-        `transform:translate(-50%,-50%);`;
+      ghost.setCssProps({ '--ffc-ghost-w': `${GHOST_W}px`, '--ffc-ghost-h': `${GHOST_H}px` });
 
       const startX   = e.clientX;
       const startY   = e.clientY;
@@ -228,12 +231,11 @@ export class FilteredFileCommandsPlugin extends Plugin {
         const dy = me.clientY - startY;
         if (!dragging && Math.sqrt(dx * dx + dy * dy) >= 5) {
           dragging = true;
-          ghost.style.display = '';
+          ghost.classList.add('is-visible');
           btn.classList.add('is-dragging');
         }
         if (dragging) {
-          ghost.style.left = `${me.clientX}px`;
-          ghost.style.top  = `${me.clientY}px`;
+          ghost.setCssProps({ '--ffc-ghost-x': `${me.clientX}px`, '--ffc-ghost-y': `${me.clientY}px` });
         }
       };
 
@@ -315,7 +317,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
         new FilteredFileModal(this.app, files).open();
       },
     });
-    this.commandRefs[cmd.id] = registered as CommandRef;
+    this.commandRefs[cmd.id] = registered;
     this.registeredCommandIds.add(cmd.id);
   }
 
@@ -327,8 +329,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       : this.app.vault.getMarkdownFiles();
     if (!cmd.filters || cmd.filters.length === 0) return allFiles;
     return allFiles.filter((file) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const fm = (this.app.metadataCache.getFileCache(file) as any)?.frontmatter ?? {};
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
       const results = cmd.filters.map((f) => this.evaluateFilter(fm, f, file));
       return cmd.matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
     });
@@ -339,8 +340,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
     const matchMode = noteType.matchMode ?? 'all';
     return this.app.vault.getMarkdownFiles().filter((file) => {
       if (filters.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fm = (this.app.metadataCache.getFileCache(file) as any)?.frontmatter ?? {};
+        const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
         const results = filters.map((f) => this.evaluateFilter(fm, f, file));
         return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
       } else if (noteType.saveFolder?.trim()) {
@@ -351,8 +351,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  evaluateFilter(fm: Record<string, any>, filter: { key: string; operator: string; value: string }, file?: TFile): boolean {
+  evaluateFilter(fm: Record<string, unknown>, filter: { key: string; operator: string; value: string }, file?: TFile): boolean {
     const { key, operator, value } = filter;
     if (operator === 'in_folder' || operator === 'not_in_folder') {
       if (!file) return true;
@@ -364,11 +363,11 @@ export class FilteredFileCommandsPlugin extends Plugin {
     const raw = fm[key];
     switch (operator) {
       case 'exists':     return raw !== undefined && raw !== null && raw !== '';
-      case 'equals':     return Array.isArray(raw) ? (raw as unknown[]).map(String).includes(value) : String(raw ?? '') === value;
-      case 'not_equals': return Array.isArray(raw) ? !(raw as unknown[]).map(String).includes(value) : String(raw ?? '') !== value;
+      case 'equals':     return Array.isArray(raw) ? (raw as unknown[]).map(stringifyFrontmatterValue).includes(value) : stringifyFrontmatterValue(raw) === value;
+      case 'not_equals': return Array.isArray(raw) ? !(raw as unknown[]).map(stringifyFrontmatterValue).includes(value) : stringifyFrontmatterValue(raw) !== value;
       case 'contains':   return Array.isArray(raw)
-        ? (raw as unknown[]).some((v) => String(v).toLowerCase().includes(value.toLowerCase()))
-        : String(raw ?? '').toLowerCase().includes(value.toLowerCase());
+        ? (raw as unknown[]).some((v) => stringifyFrontmatterValue(v).toLowerCase().includes(value.toLowerCase()))
+        : stringifyFrontmatterValue(raw).toLowerCase().includes(value.toLowerCase());
       default: return true;
     }
   }
@@ -389,7 +388,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
         ).open();
       },
     });
-    this.commandRefs[cmdId] = registered as CommandRef;
+    this.commandRefs[cmdId] = registered;
     this.registeredCommandIds.add(cmdId);
   }
 
@@ -407,7 +406,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
         new FilteredFileModal(this.app, files, current.name).open();
       },
     });
-    this.commandRefs[cmdId] = registered as CommandRef;
+    this.commandRefs[cmdId] = registered;
     this.registeredCommandIds.add(cmdId);
   }
 
@@ -463,14 +462,19 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
 
     // Register with text-formatting-toolbar if available
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+       text-formatting-toolbar is a third-party plugin with no published types. */
     const ttPlugin = (this.app as any).plugins?.getPlugin?.('text-formatting-toolbar');
     if (ttPlugin?.api) {
       ttPlugin.api.addCommand({
+        // This is text-formatting-toolbar's own addCommand API (not Obsidian's), which requires the full "pluginId:commandId" form.
         id: 'filtered-file-commands:ffc-new-note-from-selection',
         icon: 'box-select',
         name: 'New note from selection',
       });
     }
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+       End of the text-formatting-toolbar reflection block. */
   }
 
   // ── File creation ─────────────────────────────────────────────────────────────
@@ -517,13 +521,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
     try {
       const newFile = await this.app.vault.create(filePath, content);
       const notice = new Notice('', 6000);
-      const frag = notice.noticeEl.createSpan();
+      const frag = notice.messageEl.createSpan();
       frag.appendText('Created: ');
-      const link = frag.createEl('a', { text: title, href: '#' });
-      link.style.cssText = 'text-decoration:underline;cursor:pointer;';
+      const link = frag.createEl('a', { text: title, href: '#', cls: 'ffc-notice-link' });
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        this.app.workspace.getLeaf(false).openFile(newFile);
+        void this.app.workspace.getLeaf(false).openFile(newFile);
         notice.hide();
       });
     } catch (err) {
@@ -625,9 +628,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
   private getTemplatesFolder(): string {
     if (this.settings.templatesFolder) return this.settings.templatesFolder;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return --
+         Core plugin internals (app.internalPlugins) aren't part of the public Obsidian API. */
       const core = (this.app as any).internalPlugins?.plugins?.['templates'];
       if (core?.enabled) return core.instance?.options?.folder ?? '';
+      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return --
+         End of the internalPlugins reflection block. */
     } catch { /* ignore */ }
     return '';
   }
@@ -643,14 +649,13 @@ export class FilteredFileCommandsPlugin extends Plugin {
   // ── Persistence ───────────────────────────────────────────────────────────────
 
   async loadSettings(): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = ((await this.loadData()) ?? {}) as Record<string, any>;
+    const raw = ((await this.loadData()) ?? {}) as Record<string, unknown>;
     if (raw.noteTypes === undefined && Array.isArray(raw.objectTypes)) {
       raw.noteTypes = raw.objectTypes;
     }
     delete raw.objectTypes;
 
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw) as PluginSettings;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
     if (!this.settings.noteTypes)                     this.settings.noteTypes = [];
     if (this.settings.templatesFolder === undefined)  this.settings.templatesFolder = '';
     if (this.settings.triggerKey === undefined)       this.settings.triggerKey = '';
@@ -717,7 +722,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
           this.previewNotePaths.add(file.path);
         }
         if (noteType.showStatusInLinks) {
-          const raw = this.app.metadataCache.getFileCache(file)?.frontmatter?.['status'];
+          const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.['status'];
           if (typeof raw === 'string' && VALID_STATUSES.has(raw)) {
             this.statusNoteMap.set(file.basename, raw);
           }

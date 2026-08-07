@@ -1,6 +1,7 @@
-import { App, FuzzySuggestModal, Notice, TFile, setIcon } from 'obsidian';
+import { App, FuzzySuggestModal, Notice, TFile } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { NoteType } from '../types.ts';
+import { stringifyFrontmatterValue } from '../utils/helpers.ts';
 
 interface CanvasItem {
   file: TFile;
@@ -72,8 +73,8 @@ export class CanvasNoteSwitcher extends FuzzySuggestModal<CanvasItem> {
   renderSuggestion({ item: { file, noteType } }: { item: CanvasItem }, el: HTMLElement): void {
     const fm    = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const title = fm['title'] ? String(fm['title']) : file.basename;
-    el.createEl('span', { text: title,        cls: 'suggestion-title' });
-    el.createEl('span', { text: noteType.name, cls: 'suggestion-note'  });
+    el.createSpan({ text: title,        cls: 'suggestion-title' });
+    el.createSpan({ text: noteType.name, cls: 'suggestion-note'  });
   }
 
   onChooseItem({ file, noteType }: CanvasItem): void {
@@ -82,14 +83,14 @@ export class CanvasNoteSwitcher extends FuzzySuggestModal<CanvasItem> {
 
   private _createCanvasCard(file: TFile, noteType: NoteType): void {
     const fm           = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const title        = fm['title'] ? String(fm['title']) : file.basename;
+    const title        = fm['title'] ? stringifyFrontmatterValue(fm['title']) : file.basename;
     const canvasFields = noteType.canvasFields ?? [];
 
     let imageEmbed = '';
     if (noteType.showImageInCanvas && noteType.imageKey) {
-      const rawImg = fm[noteType.imageKey];
+      const rawImg: unknown = fm[noteType.imageKey];
       if (rawImg) {
-        const v = String(rawImg).trim();
+        const v = stringifyFrontmatterValue(rawImg).trim();
         if (/^https?:\/\//i.test(v)) {
           imageEmbed = `![](${v})\n`;
         } else {
@@ -104,9 +105,9 @@ export class CanvasNoteSwitcher extends FuzzySuggestModal<CanvasItem> {
       const key   = typeof pf === 'string' ? pf : (pf.key   ?? '');
       const label = typeof pf === 'string' ? pf : (pf.label || pf.key || key);
       if (!key) continue;
-      const raw = fm[key];
+      const raw: unknown = fm[key];
       if (raw === undefined || raw === null || raw === '') continue;
-      const displayVal = Array.isArray(raw) ? (raw as unknown[]).map(String).join(', ') : String(raw);
+      const displayVal = Array.isArray(raw) ? (raw as unknown[]).map(stringifyFrontmatterValue).join(', ') : stringifyFrontmatterValue(raw);
       text += `\n${label}: ${displayVal}`;
     }
     text += `\n\n[[${file.basename}]]`;

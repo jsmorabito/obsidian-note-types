@@ -4,7 +4,7 @@ import { renderFieldInputs } from '../utils/helpers.ts';
 
 export class NewNoteModal extends Modal {
   private noteType: NoteType;
-  private onSubmit: (title: string, fieldValues: Record<string, string>, description: string) => void;
+  private onSubmit: (title: string, fieldValues: Record<string, string>, description: string) => void | Promise<void>;
   private titleValue: string;
   private fieldValues: Record<string, string> = {};
   private descriptionValue = '';
@@ -12,7 +12,7 @@ export class NewNoteModal extends Modal {
   constructor(
     app: App,
     noteType: NoteType,
-    onSubmit: (title: string, fieldValues: Record<string, string>, description: string) => void,
+    onSubmit: (title: string, fieldValues: Record<string, string>, description: string) => void | Promise<void>,
     initialTitle = '',
   ) {
     super(app);
@@ -36,7 +36,7 @@ export class NewNoteModal extends Modal {
           if (e.key === 'Enter') this.submit();
           if (e.key === 'Escape') this.close();
         });
-        setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
+        window.setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
       });
 
     const descSetting = new Setting(contentEl)
@@ -61,7 +61,7 @@ export class NewNoteModal extends Modal {
     const title = this.titleValue.trim();
     if (!title) { new Notice('Please enter a title.'); return; }
     this.close();
-    this.onSubmit(title, this.fieldValues, this.descriptionValue);
+    void this.onSubmit(title, this.fieldValues, this.descriptionValue);
   }
 
   onClose(): void { this.contentEl.empty(); }

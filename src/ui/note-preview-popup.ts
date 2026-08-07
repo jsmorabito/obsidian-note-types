@@ -9,8 +9,8 @@ import { NoteType } from '../types.ts';
 export class NotePreviewPopup {
   private plugin: FilteredFileCommandsPlugin;
   private popup: HTMLElement | null        = null;
-  private hideTimer: ReturnType<typeof setTimeout> | null = null;
-  private showTimer: ReturnType<typeof setTimeout> | null = null;
+  private hideTimer: number | null = null;
+  private showTimer: number | null = null;
   private _currentFile: TFile | null       = null;
 
   private readonly _onMouseOver: (e: MouseEvent) => void;
@@ -37,7 +37,7 @@ export class NotePreviewPopup {
 
     const anchor = el.matches('a.internal-link[data-href]')
       ? el as HTMLAnchorElement
-      : el.closest('a.internal-link[data-href]') as HTMLAnchorElement | null;
+      : el.closest('a.internal-link[data-href]');
     if (anchor) {
       linkpath = (anchor.getAttribute('data-href') ?? '').split('#')[0].trim();
     }
@@ -61,21 +61,21 @@ export class NotePreviewPopup {
     const noteType = this._getNoteTypeForFile(file);
     if (!noteType) return;
 
-    if (this.hideTimer) clearTimeout(this.hideTimer);
-    if (this.showTimer) clearTimeout(this.showTimer);
+    if (this.hideTimer) window.clearTimeout(this.hideTimer);
+    if (this.showTimer) window.clearTimeout(this.showTimer);
     if (this.popup && this._currentFile === file) return;
 
-    const triggerEl = anchor ?? el.closest('.cm-hmd-internal-link') ?? null;
-    this.showTimer = setTimeout(() => {
-      this._showForFile(file, noteType, e.clientX, e.clientY, triggerEl as HTMLElement | null);
+    const triggerEl = (anchor ?? el.closest('.cm-hmd-internal-link')) as HTMLElement | null;
+    this.showTimer = window.setTimeout(() => {
+      void this._showForFile(file, noteType, e.clientX, e.clientY, triggerEl);
     }, 280);
   }
 
   private _handleMouseOut(e: MouseEvent): void {
-    if (this.showTimer) clearTimeout(this.showTimer);
+    if (this.showTimer) window.clearTimeout(this.showTimer);
     const toEl = e.relatedTarget as Node | null;
     if (this.popup && toEl && this.popup.contains(toEl)) return;
-    this.hideTimer = setTimeout(() => this.hide(), 200);
+    this.hideTimer = window.setTimeout(() => this.hide(), 200);
   }
 
   // ── Build and position the popup ──────────────────────────────────────────────
@@ -92,13 +92,12 @@ export class NotePreviewPopup {
     if (!hasFields && !hasImage) return;
 
     const app = this.plugin.app;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fm    = (app.metadataCache.getFileCache(file) as any)?.frontmatter ?? {};
+    const fm    = app.metadataCache.getFileCache(file)?.frontmatter ?? {};
     const title = fm['title'] ? String(fm['title']) : file.basename;
 
     this.hide();
 
-    const popup = document.createElement('div');
+    const popup = createDiv();
     popup.className = 'ffc-preview-popup';
 
     if (hasImage && noteType.imageKey) {
@@ -112,7 +111,7 @@ export class NotePreviewPopup {
     }
 
     const header = popup.createDiv({ cls: 'ffc-preview-header' });
-    header.createEl('span', { text: title, cls: 'ffc-preview-title' });
+    header.createSpan({ text: title, cls: 'ffc-preview-title' });
     popup.createEl('hr', { cls: 'ffc-preview-divider' });
 
     const body    = popup.createDiv({ cls: 'ffc-preview-body' });
@@ -129,7 +128,7 @@ export class NotePreviewPopup {
           e.preventDefault();
           e.stopPropagation();
           this.hide();
-          app.workspace.openLinkText(linkPath, '', false);
+          void app.workspace.openLinkText(linkPath, '', false);
         });
       } else {
         valueEl.appendText(String(str));
@@ -140,12 +139,12 @@ export class NotePreviewPopup {
       const key   = typeof pf === 'string' ? pf : (pf.key ?? '');
       const label = (typeof pf === 'string' ? pf : (pf.label || pf.key)) || key;
       if (!key) continue;
-      const raw = fm[key];
+      const raw: unknown = fm[key];
       if (raw === undefined || raw === null || raw === '') continue;
 
       const row = body.createDiv({ cls: 'ffc-preview-row' });
-      row.createEl('span', { text: label, cls: 'ffc-preview-label' });
-      const valueEl = row.createEl('span', { cls: 'ffc-preview-value' });
+      row.createSpan({ text: label, cls: 'ffc-preview-label' });
+      const valueEl = row.createSpan({ cls: 'ffc-preview-value' });
       if (Array.isArray(raw)) {
         (raw as unknown[]).forEach((item, i) => {
           if (i > 0) valueEl.appendText(', ');
@@ -166,9 +165,9 @@ export class NotePreviewPopup {
     this.popup        = popup;
     this._currentFile = file;
 
-    popup.addEventListener('mouseenter', () => { if (this.hideTimer) clearTimeout(this.hideTimer); });
+    popup.addEventListener('mouseenter', () => { if (this.hideTimer) window.clearTimeout(this.hideTimer); });
     popup.addEventListener('mouseleave', () => {
-      this.hideTimer = setTimeout(() => this.hide(), 200);
+      this.hideTimer = window.setTimeout(() => this.hide(), 200);
     });
 
     popup.addEventListener('click', (e) => {
@@ -177,7 +176,7 @@ export class NotePreviewPopup {
       this.hide();
       if (fileToOpen) {
         const newLeaf: boolean | 'tab' = e.metaKey || e.ctrlKey ? 'tab' : false;
-        this.plugin.app.workspace.openLinkText(fileToOpen.basename, '', newLeaf);
+        void this.plugin.app.workspace.openLinkText(fileToOpen.basename, '', newLeaf);
       }
     });
 
@@ -206,7 +205,7 @@ export class NotePreviewPopup {
       popup.style.left = `${Math.max(margin, left)}px`;
       popup.style.top  = `${Math.max(margin, top)}px`;
     };
-    requestAnimationFrame(positionPopup);
+    window.requestAnimationFrame(positionPopup);
   }
 
   private async _resolveImageSrc(rawValue: string, app: App): Promise<string | null> {
@@ -240,8 +239,8 @@ export class NotePreviewPopup {
 
   destroy(): void {
     this.hide();
-    if (this.hideTimer) clearTimeout(this.hideTimer);
-    if (this.showTimer) clearTimeout(this.showTimer);
+    if (this.hideTimer) window.clearTimeout(this.hideTimer);
+    if (this.showTimer) window.clearTimeout(this.showTimer);
     document.removeEventListener('mouseover', this._onMouseOver, true);
     document.removeEventListener('mouseout',  this._onMouseOut,  true);
   }

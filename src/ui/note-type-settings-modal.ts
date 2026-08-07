@@ -28,7 +28,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Name ──────────────────────────────────────────────────────────────────
     new Setting(contentEl).setName('Note type name').setDesc('Creates a "Create new {name}" command in the palette.')
-      .addText((text) => text.setPlaceholder('e.g. Task').setValue(obj.name)
+      .addText((text) => text.setPlaceholder('E.g. Task').setValue(obj.name)
         .onChange(async (value) => {
           obj.name = value;
           await this.plugin.saveSettings();
@@ -44,7 +44,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Description ───────────────────────────────────────────────────────────
     new Setting(contentEl).setName('Description').setDesc('Short description shown beneath the note type name in the settings list.')
-      .addText((text) => text.setPlaceholder('e.g. Tracks actionable to-dos').setValue(obj.description || '')
+      .addText((text) => text.setPlaceholder('E.g. Tracks actionable to-dos').setValue(obj.description || '')
         .onChange(async (value) => {
           obj.description = value;
           await this.plugin.saveSettings();
@@ -60,17 +60,17 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Note Detection ────────────────────────────────────────────────────────
     const detectionSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    detectionSection.createEl('p', { text: 'Note Detection', cls: 'ffc-filters-title' });
+    detectionSection.createEl('p', { text: 'Note detection', cls: 'ffc-filters-title' });
     detectionSection.createEl('p', {
-      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "Find" command. If no filters are set, files in the Save Folder are used as a fallback.',
+      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
       cls: 'ffc-hint',
     });
 
     new Setting(detectionSection)
       .setName('Filter match mode')
-      .setDesc('Should a file match ALL filters (AND) or at least ONE filter (OR)?')
+      .setDesc('Should a file match all filters (and) or at least one filter (or)?')
       .addDropdown((dd) =>
-        dd.addOption('all', 'Match ALL (AND)').addOption('any', 'Match ANY (OR)')
+        dd.addOption('all', 'Match all (and)').addOption('any', 'Match any (or)')
           .setValue(obj.matchMode ?? 'all')
           .onChange(async (value) => { obj.matchMode = value as 'all' | 'any'; await this.plugin.saveSettings(); })
       );
@@ -82,7 +82,7 @@ export class NoteTypeSettingsModal extends Modal {
       this._renderNoteMatchFilter(detectionSection, fi);
     }
     new Setting(detectionSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Detection Filter').onClick(async () => {
+      btn.setButtonText('＋ add detection filter').onClick(async () => {
         if (!obj.matchFilters) obj.matchFilters = [];
         obj.matchFilters.push({ key: '', operator: 'equals', value: '' });
         await this.plugin.saveSettings();
@@ -99,7 +99,7 @@ export class NoteTypeSettingsModal extends Modal {
       );
 
     new Setting(detectionSection)
-      .setName('Enable "Find" command')
+      .setName('Enable "find" command')
       .setDesc(`When enabled, adds a "Find ${obj.name}" command to the palette for fuzzy-searching files of this type.`)
       .addToggle((toggle) =>
         toggle.setValue(obj.enableFindCommand ?? false)
@@ -141,7 +141,7 @@ export class NoteTypeSettingsModal extends Modal {
     if (templateFiles.length > 0) {
       new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
         .addDropdown((dd) => {
-          dd.addOption('', '— None —');
+          dd.addOption('', '— none —');
           for (const f of templateFiles) dd.addOption(f.path, f.basename);
           dd.setValue(obj.templatePath || '');
           dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); });
@@ -153,14 +153,14 @@ export class NoteTypeSettingsModal extends Modal {
         );
     }
 
-    new Setting(contentEl).setName('Save folder').setDesc('Where new files are created (e.g. "Projects/Tasks"). Leave blank for vault root.')
-      .addText((text) => text.setPlaceholder('e.g. Projects/Tasks').setValue(obj.saveFolder || '')
+    new Setting(contentEl).setName('Save folder').setDesc('Where new files are created (e.g. "projects/tasks"). Leave blank for vault root.')
+      .addText((text) => text.setPlaceholder('E.g. Projects/tasks').setValue(obj.saveFolder || '')
         .onChange(async (value) => { obj.saveFolder = value.trim(); await this.plugin.saveSettings(); })
       );
 
     // ── Creation Fields ───────────────────────────────────────────────────────
     const fieldsSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    fieldsSection.createEl('p', { text: 'Creation Fields', cls: 'ffc-filters-title' });
+    fieldsSection.createEl('p', { text: 'Creation fields', cls: 'ffc-filters-title' });
     fieldsSection.createEl('p', {
       text: "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
       cls: 'ffc-hint',
@@ -170,7 +170,7 @@ export class NoteTypeSettingsModal extends Modal {
       this._renderNoteField(fieldsSection, fi);
     }
     new Setting(fieldsSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Field').onClick(async () => {
+      btn.setButtonText('＋ add field').onClick(async () => {
         if (!obj.fields) obj.fields = [];
         obj.fields.push({ key: '', label: '', type: 'text' });
         await this.plugin.saveSettings();
@@ -180,7 +180,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Preview Fields ────────────────────────────────────────────────────────
     const previewSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    previewSection.createEl('p', { text: 'Preview Fields', cls: 'ffc-filters-title' });
+    previewSection.createEl('p', { text: 'Preview fields', cls: 'ffc-filters-title' });
     previewSection.createEl('p', {
       text: 'Frontmatter keys shown when hovering over a link to a note of this type.',
       cls: 'ffc-hint',
@@ -190,7 +190,7 @@ export class NoteTypeSettingsModal extends Modal {
       this._renderPreviewField(previewSection, fi);
     }
     new Setting(previewSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Preview Field').onClick(async () => {
+      btn.setButtonText('＋ add preview field').onClick(async () => {
         if (!obj.previewFields) obj.previewFields = [];
         obj.previewFields.push({ key: '', label: '' });
         await this.plugin.saveSettings();
@@ -200,7 +200,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     new Setting(previewSection)
       .setName('Show cover image in preview')
-      .setDesc('When enabled, the image from the Image Key is shown at the top of the hover card.')
+      .setDesc('When enabled, the image from the image key is shown at the top of the hover card.')
       .addToggle((toggle) =>
         toggle.setValue(obj.showImageInPreview ?? false)
           .onChange(async (value) => { obj.showImageInPreview = value; await this.plugin.saveSettings(); })
@@ -208,7 +208,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Canvas Card Fields ────────────────────────────────────────────────────
     const canvasSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    canvasSection.createEl('p', { text: 'Canvas Card Fields', cls: 'ffc-filters-title' });
+    canvasSection.createEl('p', { text: 'Canvas card fields', cls: 'ffc-filters-title' });
     canvasSection.createEl('p', {
       text: 'Frontmatter keys shown on canvas cards for notes of this type.',
       cls: 'ffc-hint',
@@ -218,7 +218,7 @@ export class NoteTypeSettingsModal extends Modal {
       this._renderCanvasField(canvasSection, fi);
     }
     new Setting(canvasSection).addButton((btn) =>
-      btn.setButtonText('＋ Add Canvas Field').onClick(async () => {
+      btn.setButtonText('＋ add canvas field').onClick(async () => {
         if (!obj.canvasFields) obj.canvasFields = [];
         obj.canvasFields.push({ key: '', label: '' });
         await this.plugin.saveSettings();
@@ -228,7 +228,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     new Setting(canvasSection)
       .setName('Show cover image on canvas cards')
-      .setDesc('When enabled, the image from the Image Key is embedded at the top of the canvas card.')
+      .setDesc('When enabled, the image from the image key is embedded at the top of the canvas card.')
       .addToggle((toggle) =>
         toggle.setValue(obj.showImageInCanvas ?? false)
           .onChange(async (value) => { obj.showImageInCanvas = value; await this.plugin.saveSettings(); })
@@ -236,7 +236,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     // ── Cover Image ───────────────────────────────────────────────────────────
     const imageSection = contentEl.createDiv({ cls: 'ffc-filters-section' });
-    imageSection.createEl('p', { text: 'Cover Image', cls: 'ffc-filters-title' });
+    imageSection.createEl('p', { text: 'Cover image', cls: 'ffc-filters-title' });
     imageSection.createEl('p', {
       text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image").',
       cls: 'ffc-hint',
@@ -244,7 +244,7 @@ export class NoteTypeSettingsModal extends Modal {
 
     new Setting(imageSection)
       .setName('Image frontmatter key')
-      .setDesc('e.g. cover, image, thumbnail')
+      .setDesc('E.g. cover, image, thumbnail')
       .addText((text) =>
         text.setPlaceholder('cover')
           .setValue(obj.imageKey ?? '')
@@ -262,7 +262,7 @@ export class NoteTypeSettingsModal extends Modal {
     if (!isPathOp) {
       const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
       keyInput.type = 'text'; keyInput.placeholder = 'Property key'; keyInput.value = filter.key ?? '';
-      keyInput.addEventListener('change', async () => { filter.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
+      keyInput.addEventListener('change', () => { filter.key = keyInput.value.trim(); void this.plugin.saveSettings(); });
     }
 
     const opSelect = row.createEl('select', { cls: 'ffc-select' });
@@ -277,9 +277,9 @@ export class NoteTypeSettingsModal extends Modal {
       const opt = opSelect.createEl('option', { text: op.label, value: op.value });
       if (filter.operator === op.value) opt.selected = true;
     }
-    opSelect.addEventListener('change', async () => {
+    opSelect.addEventListener('change', () => {
       filter.operator = opSelect.value as typeof filter.operator;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
       this._render();
     });
 
@@ -288,7 +288,7 @@ export class NoteTypeSettingsModal extends Modal {
       valInput.type = 'text';
       valInput.placeholder = isPathOp ? 'Folder path (e.g. Templates)' : 'Value';
       valInput.value = filter.value ?? '';
-      valInput.addEventListener('change', async () => { filter.value = valInput.value; await this.plugin.saveSettings(); });
+      valInput.addEventListener('change', () => { filter.value = valInput.value; void this.plugin.saveSettings(); });
     }
 
     row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
@@ -306,12 +306,12 @@ export class NoteTypeSettingsModal extends Modal {
     const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
     labelInput.type = 'text'; labelInput.placeholder = 'Label'; labelInput.value = field.label ?? '';
     labelInput.title = 'Display label shown in the creation dialog';
-    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
+    labelInput.addEventListener('change', () => { field.label = labelInput.value; void this.plugin.saveSettings(); });
 
     const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
     keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
     keyInput.title = 'The frontmatter property key written into the new file';
-    keyInput.addEventListener('change', async () => { field.key = keyInput.value.trim(); await this.plugin.saveSettings(); });
+    keyInput.addEventListener('change', () => { field.key = keyInput.value.trim(); void this.plugin.saveSettings(); });
 
     const typeSelect = row.createEl('select', { cls: 'ffc-select' });
     for (const t of [{ value: 'text', label: 'Text' }, { value: 'list', label: 'List' }]) {
@@ -319,7 +319,7 @@ export class NoteTypeSettingsModal extends Modal {
       if (field.type === t.value) opt.selected = true;
     }
     typeSelect.title = 'List splits comma-separated input into a YAML array';
-    typeSelect.addEventListener('change', async () => { field.type = typeSelect.value as 'text' | 'list'; await this.plugin.saveSettings(); });
+    typeSelect.addEventListener('change', () => { field.type = typeSelect.value as 'text' | 'list'; void this.plugin.saveSettings(); });
 
     row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {
       obj.fields.splice(fieldIndex, 1);
@@ -336,14 +336,14 @@ export class NoteTypeSettingsModal extends Modal {
     const labelInput = row.createEl('input', { cls: 'ffc-input ffc-input-label' });
     labelInput.type = 'text'; labelInput.placeholder = 'Display label'; labelInput.value = field.label ?? '';
     labelInput.title = 'Label shown in the preview card (leave blank to use the key name)';
-    labelInput.addEventListener('change', async () => { field.label = labelInput.value; await this.plugin.saveSettings(); });
+    labelInput.addEventListener('change', () => { field.label = labelInput.value; void this.plugin.saveSettings(); });
 
     const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
     keyInput.type = 'text'; keyInput.placeholder = 'Frontmatter key'; keyInput.value = field.key ?? '';
     keyInput.title = 'The frontmatter property key whose value will appear in the preview';
-    keyInput.addEventListener('change', async () => {
+    keyInput.addEventListener('change', () => {
       field.key = keyInput.value.trim();
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
       this.plugin.buildStyledNoteSet();
       this.plugin.refreshNoteLinkStyles();
     });
@@ -367,9 +367,9 @@ export class NoteTypeSettingsModal extends Modal {
     labelInput.placeholder = 'Display label';
     labelInput.value       = field.label ?? '';
     labelInput.title       = 'Label shown on the canvas card (leave blank to use the key name)';
-    labelInput.addEventListener('change', async () => {
+    labelInput.addEventListener('change', () => {
       field.label = labelInput.value;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const keyInput = row.createEl('input', { cls: 'ffc-input ffc-input-key' });
@@ -377,9 +377,9 @@ export class NoteTypeSettingsModal extends Modal {
     keyInput.placeholder = 'Frontmatter key';
     keyInput.value       = field.key ?? '';
     keyInput.title       = 'The frontmatter property key whose value will appear on the card';
-    keyInput.addEventListener('change', async () => {
+    keyInput.addEventListener('change', () => {
       field.key = keyInput.value.trim();
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     row.createEl('button', { text: '✕', cls: 'ffc-btn-remove' }).onclick = async () => {

@@ -107,19 +107,19 @@ export class NoteTypeSuggest extends EditorSuggest<SuggestionItem> {
       if (suggestion.provider.renderItem) {
         suggestion.provider.renderItem(suggestion.item, el);
       } else {
-        el.createEl('span', { text: suggestion.item.title, cls: 'suggestion-title' });
+        el.createSpan({ text: suggestion.item.title, cls: 'suggestion-title' });
         if (suggestion.item.subtitle) {
-          el.createEl('span', { text: suggestion.item.subtitle, cls: 'suggestion-note' });
+          el.createSpan({ text: suggestion.item.subtitle, cls: 'suggestion-note' });
         }
       }
       return;
     }
 
     // Note-type item (existing behaviour)
-    el.createEl('span', { text: suggestion.title, cls: 'suggestion-title' });
+    el.createSpan({ text: suggestion.title, cls: 'suggestion-title' });
     const folder = suggestion.file.parent?.path;
     if (folder && folder !== '/') {
-      el.createEl('span', { text: folder, cls: 'suggestion-note' });
+      el.createSpan({ text: folder, cls: 'suggestion-note' });
     }
   }
 

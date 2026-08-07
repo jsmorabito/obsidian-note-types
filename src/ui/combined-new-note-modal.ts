@@ -5,7 +5,7 @@ import { renderFieldInputs } from '../utils/helpers.ts';
 export class CombinedNewNoteModal extends Modal {
   private noteTypes: NoteType[];
   private selectedType: NoteType;
-  private onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void;
+  private onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void | Promise<void>;
   private titleValue = '';
   private initialTitle: string;
   private fieldValues: Record<string, string> = {};
@@ -14,7 +14,7 @@ export class CombinedNewNoteModal extends Modal {
   constructor(
     app: App,
     noteTypes: NoteType[],
-    onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void,
+    onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void | Promise<void>,
     initialTitle = '',
   ) {
     super(app);
@@ -27,7 +27,7 @@ export class CombinedNewNoteModal extends Modal {
   onOpen(): void {
     const { contentEl } = this;
     contentEl.addClass('ffc-new-note-modal');
-    contentEl.createEl('h2', { text: 'New Note' });
+    contentEl.createEl('h2', { text: 'New note' });
 
     let descSettingEl: HTMLElement | null = null;
 
@@ -52,7 +52,7 @@ export class CombinedNewNoteModal extends Modal {
           if (e.key === 'Enter') this.submit();
           if (e.key === 'Escape') this.close();
         });
-        setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
+        window.setTimeout(() => { text.inputEl.focus(); text.inputEl.select(); }, 50);
       });
 
     const descSetting = new Setting(contentEl)
@@ -78,7 +78,7 @@ export class CombinedNewNoteModal extends Modal {
     const title = this.titleValue.trim();
     if (!title) { new Notice('Please enter a title.'); return; }
     this.close();
-    this.onSubmit(this.selectedType, title, this.fieldValues, this.descriptionValue);
+    void this.onSubmit(this.selectedType, title, this.fieldValues, this.descriptionValue);
   }
 
   onClose(): void { this.contentEl.empty(); }
