@@ -831,8 +831,8 @@ var FilteredCommandDeleteModal = class extends import_obsidian6.Modal {
 // src/settings.ts
 var DEFAULT_SETTINGS = {
   commands: [],
-  filteredCommandsEnabled: true,
-  filteredWidgetEnabled: true,
+  filteredCommandsEnabled: false,
+  filteredWidgetEnabled: false,
   noteTypes: [],
   templatesFolder: "",
   triggerKey: "",
