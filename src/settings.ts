@@ -9,8 +9,8 @@ import { nameToCommandSlug } from './utils/helpers.ts';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   commands: [],
-  filteredCommandsEnabled: true,
-  filteredWidgetEnabled: true,
+  filteredCommandsEnabled: false,
+  filteredWidgetEnabled: false,
   noteTypes: [],
   templatesFolder: '',
   triggerKey: '',
