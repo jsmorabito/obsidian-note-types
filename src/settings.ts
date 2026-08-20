@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting, setIcon } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from './main.ts';
 import { PluginSettings } from './types.ts';
-import { NoteTypeSettingsModal } from './ui/note-type-settings-modal.ts';
+import { NoteTypeSettingsPage } from './ui/note-type-settings-page.ts';
 import { NoteTypeDeleteModal } from './ui/note-type-delete-modal.ts';
 import { FilteredCommandSettingsModal } from './ui/filtered-command-settings-modal.ts';
 import { FilteredCommandDeleteModal } from './ui/filtered-command-delete-modal.ts';
@@ -28,6 +28,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
 
   private filteredCmdsSectionEl?: HTMLElement;
   private filteredWidgetSectionEl?: HTMLElement;
+  private activeNoteType: number | null = null;
 
   display(): void {
     const { containerEl } = this;
@@ -35,6 +36,11 @@ export class MyPluginSettingTab extends PluginSettingTab {
     containerEl.addClass('ffc-settings');
     this.filteredCmdsSectionEl = undefined;
     this.filteredWidgetSectionEl = undefined;
+
+    if (this.activeNoteType !== null) {
+      this.renderNoteTypePage(containerEl, this.activeNoteType);
+      return;
+    }
 
     new Setting(containerEl)
       .setName('Trigger key')
@@ -243,7 +249,8 @@ export class MyPluginSettingTab extends PluginSettingTab {
     const row = containerEl.createDiv({ cls: 'ffc-item-row' });
     row.onclick = (e) => {
       if (!(e.target as Element).closest('.ffc-item-row-actions')) {
-        new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+        this.activeNoteType = index;
+        this.display();
       }
     };
 
@@ -258,7 +265,8 @@ export class MyPluginSettingTab extends PluginSettingTab {
     const gearBtn = actions.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Edit settings' } });
     setIcon(gearBtn, 'settings');
     gearBtn.onclick = () => {
-      new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+      this.activeNoteType = index;
+      this.display();
     };
 
     const trashBtn = actions.createEl('button', { cls: 'clickable-icon ffc-btn-icon-danger', attr: { 'aria-label': 'Delete note type' } });
@@ -266,5 +274,24 @@ export class MyPluginSettingTab extends PluginSettingTab {
     trashBtn.onclick = () => {
       new NoteTypeDeleteModal(this.app, this.plugin, index, () => this.display()).open();
     };
+  }
+
+  // ── Note type sub-page ────────────────────────────────────────────────────────
+
+  private renderNoteTypePage(containerEl: HTMLElement, index: number): void {
+    const obj = this.plugin.settings.noteTypes[index];
+    if (!obj) { this.activeNoteType = null; this.display(); return; }
+
+    const header = containerEl.createDiv({ cls: 'ffc-subpage-header' });
+    const backBtn = header.createEl('button', { cls: 'clickable-icon', attr: { 'aria-label': 'Back' } });
+    setIcon(backBtn, 'arrow-left');
+    backBtn.onclick = () => {
+      this.activeNoteType = null;
+      this.display();
+    };
+    const titleEl = header.createSpan({ text: obj.name || 'Note type', cls: 'ffc-subpage-title' });
+
+    const pageEl = containerEl.createDiv();
+    new NoteTypeSettingsPage(this.app, this.plugin, index, (title) => { titleEl.textContent = title; }).render(pageEl);
   }
 }

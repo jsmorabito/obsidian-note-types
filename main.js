@@ -29,7 +29,7 @@ var import_obsidian16 = require("obsidian");
 // src/settings.ts
 var import_obsidian7 = require("obsidian");
 
-// src/ui/note-type-settings-modal.ts
+// src/ui/note-type-settings-page.ts
 var import_obsidian3 = require("obsidian");
 
 // src/utils/helpers.ts
@@ -254,30 +254,31 @@ function renderFieldInputs(container, app, noteType, fieldValues, onEnter, inser
   }
 }
 
-// src/ui/note-type-settings-modal.ts
-var NoteTypeSettingsModal = class extends import_obsidian3.Modal {
-  constructor(app, plugin, index, onDismiss) {
-    super(app);
+// src/ui/note-type-settings-page.ts
+var NoteTypeSettingsPage = class {
+  constructor(app, plugin, index, onTitleChange) {
+    this.app = app;
     this.plugin = plugin;
     this.index = index;
-    this.onDismiss = onDismiss;
+    this.onTitleChange = onTitleChange;
   }
-  onOpen() {
+  render(containerEl) {
+    this.containerEl = containerEl;
     this._render();
   }
   _render() {
     var _a, _b, _c, _d;
-    const { contentEl } = this;
+    const contentEl = this.containerEl;
     contentEl.empty();
-    contentEl.addClass("ffc-item-modal");
+    contentEl.addClass("ffc-item-page");
     const obj = this.plugin.settings.noteTypes[this.index];
     if (!obj) {
       contentEl.createEl("p", { text: "Note type not found." });
       return;
     }
-    contentEl.createEl("h2", { text: obj.name || "Note Type Settings", cls: "ffc-modal-title" });
     new import_obsidian3.Setting(contentEl).setName("Note type name").setDesc('Creates a "Create new {name}" command in the palette.').addText(
       (text) => text.setPlaceholder("E.g. Task").setValue(obj.name).onChange(async (value) => {
+        var _a2;
         obj.name = value;
         await this.plugin.saveSettings();
         const cmdId = `ffc-notetype-${obj.commandSlug}`;
@@ -287,9 +288,7 @@ var NoteTypeSettingsModal = class extends import_obsidian3.Modal {
         const findCmdId = `${cmdId}-find`;
         if (refs[findCmdId])
           refs[findCmdId].name = `Find ${value}`;
-        const titleEl = contentEl.querySelector(".ffc-modal-title");
-        if (titleEl)
-          titleEl.textContent = value || "Note Type Settings";
+        (_a2 = this.onTitleChange) == null ? void 0 : _a2.call(this, value || "Note type");
       })
     );
     new import_obsidian3.Setting(contentEl).setName("Description").setDesc("Short description shown beneath the note type name in the settings list.").addText(
@@ -642,11 +641,6 @@ var NoteTypeSettingsModal = class extends import_obsidian3.Modal {
       this._render();
     };
   }
-  onClose() {
-    this.contentEl.empty();
-    if (this.onDismiss)
-      this.onDismiss();
-  }
 };
 
 // src/ui/note-type-delete-modal.ts
@@ -842,6 +836,7 @@ var DEFAULT_SETTINGS = {
 var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.activeNoteType = null;
     this.plugin = plugin;
   }
   display() {
@@ -850,6 +845,10 @@ var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
     containerEl.addClass("ffc-settings");
     this.filteredCmdsSectionEl = void 0;
     this.filteredWidgetSectionEl = void 0;
+    if (this.activeNoteType !== null) {
+      this.renderNoteTypePage(containerEl, this.activeNoteType);
+      return;
+    }
     new import_obsidian7.Setting(containerEl).setName("Trigger key").setDesc('Character that opens the inline note picker while editing (e.g. "@"). Leave blank to disable.').addText(
       (text) => text.setPlaceholder("E.g. @").setValue(this.plugin.settings.triggerKey || "").onChange(async (value) => {
         this.plugin.settings.triggerKey = value.trim().slice(0, 1);
@@ -1015,7 +1014,8 @@ var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
     const row = containerEl.createDiv({ cls: "ffc-item-row" });
     row.onclick = (e) => {
       if (!e.target.closest(".ffc-item-row-actions")) {
-        new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+        this.activeNoteType = index;
+        this.display();
       }
     };
     const info = row.createDiv({ cls: "ffc-item-row-info" });
@@ -1027,13 +1027,35 @@ var MyPluginSettingTab = class extends import_obsidian7.PluginSettingTab {
     const gearBtn = actions.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Edit settings" } });
     (0, import_obsidian7.setIcon)(gearBtn, "settings");
     gearBtn.onclick = () => {
-      new NoteTypeSettingsModal(this.app, this.plugin, index, () => this.display()).open();
+      this.activeNoteType = index;
+      this.display();
     };
     const trashBtn = actions.createEl("button", { cls: "clickable-icon ffc-btn-icon-danger", attr: { "aria-label": "Delete note type" } });
     (0, import_obsidian7.setIcon)(trashBtn, "trash-2");
     trashBtn.onclick = () => {
       new NoteTypeDeleteModal(this.app, this.plugin, index, () => this.display()).open();
     };
+  }
+  // ── Note type sub-page ────────────────────────────────────────────────────────
+  renderNoteTypePage(containerEl, index) {
+    const obj = this.plugin.settings.noteTypes[index];
+    if (!obj) {
+      this.activeNoteType = null;
+      this.display();
+      return;
+    }
+    const header = containerEl.createDiv({ cls: "ffc-subpage-header" });
+    const backBtn = header.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Back" } });
+    (0, import_obsidian7.setIcon)(backBtn, "arrow-left");
+    backBtn.onclick = () => {
+      this.activeNoteType = null;
+      this.display();
+    };
+    const titleEl = header.createSpan({ text: obj.name || "Note type", cls: "ffc-subpage-title" });
+    const pageEl = containerEl.createDiv();
+    new NoteTypeSettingsPage(this.app, this.plugin, index, (title) => {
+      titleEl.textContent = title;
+    }).render(pageEl);
   }
 };
 

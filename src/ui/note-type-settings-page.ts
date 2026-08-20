@@ -1,30 +1,33 @@
-import { App, Modal, Setting } from 'obsidian';
+import { App, Setting } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { nameToCommandSlug } from '../utils/helpers.ts';
 
-export class NoteTypeSettingsModal extends Modal {
+export class NoteTypeSettingsPage {
+  private app: App;
   private plugin: FilteredFileCommandsPlugin;
   private index: number;
-  private onDismiss: (() => void) | undefined;
+  private onTitleChange: ((title: string) => void) | undefined;
+  private containerEl!: HTMLElement;
 
-  constructor(app: App, plugin: FilteredFileCommandsPlugin, index: number, onDismiss?: () => void) {
-    super(app);
-    this.plugin    = plugin;
-    this.index     = index;
-    this.onDismiss = onDismiss;
+  constructor(app: App, plugin: FilteredFileCommandsPlugin, index: number, onTitleChange?: (title: string) => void) {
+    this.app           = app;
+    this.plugin        = plugin;
+    this.index         = index;
+    this.onTitleChange = onTitleChange;
   }
 
-  onOpen(): void { this._render(); }
+  render(containerEl: HTMLElement): void {
+    this.containerEl = containerEl;
+    this._render();
+  }
 
   private _render(): void {
-    const { contentEl } = this;
+    const contentEl = this.containerEl;
     contentEl.empty();
-    contentEl.addClass('ffc-item-modal');
+    contentEl.addClass('ffc-item-page');
 
     const obj = this.plugin.settings.noteTypes[this.index];
     if (!obj) { contentEl.createEl('p', { text: 'Note type not found.' }); return; }
-
-    contentEl.createEl('h2', { text: obj.name || 'Note Type Settings', cls: 'ffc-modal-title' });
 
     // ── Name ──────────────────────────────────────────────────────────────────
     new Setting(contentEl).setName('Note type name').setDesc('Creates a "Create new {name}" command in the palette.')
@@ -37,8 +40,7 @@ export class NoteTypeSettingsModal extends Modal {
           if (refs[cmdId]) refs[cmdId].name = `Create new ${value}`;
           const findCmdId = `${cmdId}-find`;
           if (refs[findCmdId]) refs[findCmdId].name = `Find ${value}`;
-          const titleEl = contentEl.querySelector('.ffc-modal-title');
-          if (titleEl) titleEl.textContent = value || 'Note Type Settings';
+          this.onTitleChange?.(value || 'Note type');
         })
       );
 
@@ -387,10 +389,5 @@ export class NoteTypeSettingsModal extends Modal {
       await this.plugin.saveSettings();
       this._render();
     };
-  }
-
-  onClose(): void {
-    this.contentEl.empty();
-    if (this.onDismiss) this.onDismiss();
   }
 }

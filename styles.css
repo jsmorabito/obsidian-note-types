@@ -168,6 +168,26 @@
 }
 
 
+/* ── Sub-page (definition editor) ───────────────────────────────────────── */
+/* Mirrors Obsidian's own settings sub-pages (e.g. Ribbon menu configuration):
+   a back arrow + title row above the full-width editor, instead of a modal. */
+
+.ffc-subpage-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 1em;
+}
+
+.ffc-subpage-title {
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+  color: var(--text-normal);
+}
+
+.ffc-item-page { max-width: 640px; }
+
+
 /* ── Modals ─────────────────────────────────────────────────────────────── */
 
 .ffc-item-modal { padding: 4px 8px 16px; max-width: 640px; }
