@@ -1,4 +1,4 @@
-import { App, PluginSettingTab } from 'obsidian';
+import { App, Notice, PluginSettingTab } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from './main.ts';
 import { PluginSettings } from './types.ts';
@@ -6,6 +6,8 @@ import { NoteTypeSettingsPage } from './ui/note-type-settings-page.ts';
 import { NoteTypeDeleteModal } from './ui/note-type-delete-modal.ts';
 import { FilteredCommandSettingsModal } from './ui/filtered-command-settings-modal.ts';
 import { FilteredCommandDeleteModal } from './ui/filtered-command-delete-modal.ts';
+import { RelationTypeModal } from './ui/relation-type-modal.ts';
+import { defaultRelationType, resolvedRelation } from './relations.ts';
 import { nameToCommandSlug } from './utils/helpers.ts';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -14,6 +16,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   filteredWidgetEnabled: false,
   filteredWidgetRibbon: false,
   noteTypes: [],
+  relationTypes: [defaultRelationType()],
   templatesFolder: '',
   triggerKey: '',
   fetchUrlTitles: false,
@@ -126,6 +129,48 @@ export class MyPluginSettingTab extends PluginSettingTab {
             desc: desc || undefined,
             searchable: false,
             action: (_el: HTMLElement, index: number) => this.openNoteTypePage(index),
+          };
+        }),
+      },
+
+      // ── Relations ──────────────────────────────────────────────────────────
+      {
+        type: 'list',
+        heading: 'Relations',
+        emptyState: 'No relation types defined yet.',
+        addItem: {
+          name: 'Add relation type',
+          action: () => { void this.addRelationType(); },
+        },
+        onReorder: (from, to) => {
+          const list = s.relationTypes;
+          const [moved] = list.splice(from, 1);
+          list.splice(to, 0, moved);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        onDelete: (index) => {
+          if (s.relationTypes[index]?.builtin) {
+            new Notice('The built-in “Related to” relation can’t be removed.');
+            this.update();
+            return;
+          }
+          s.relationTypes.splice(index, 1);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        items: s.relationTypes.map((rt) => {
+          const r = resolvedRelation(rt);
+          const desc = r.symmetric
+            ? `key: ${r.forwardKey || '(unset)'}`
+            : `key: ${r.forwardKey || '(unset)'} · reverse: ${r.reverseName} (${r.reverseKey || '(unset)'})`;
+          return {
+            name: rt.name || 'Untitled relation',
+            desc,
+            searchable: false,
+            action: () => {
+              new RelationTypeModal(this.app, this.plugin, rt, () => this.update()).open();
+            },
           };
         }),
       },
@@ -251,6 +296,21 @@ export class MyPluginSettingTab extends PluginSettingTab {
     await this.plugin.saveSettings();
     this.plugin.registerNoteTypeCommand(s.noteTypes[s.noteTypes.length - 1]);
     this.update();
+  }
+
+  private async addRelationType(): Promise<void> {
+    const s = this.plugin.settings;
+    const rt = {
+      id: `rel-${Date.now()}`,
+      name: 'New relation',
+      frontmatterKey: '',
+      reverseName: '',
+      reverseKey: '',
+    };
+    s.relationTypes.push(rt);
+    await this.plugin.saveSettings();
+    this.update();
+    new RelationTypeModal(this.app, this.plugin, rt, () => this.update()).open();
   }
 
   private async addFilteredCommand(): Promise<void> {

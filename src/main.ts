@@ -1,6 +1,11 @@
 import { Notice, Plugin, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
-import { PluginSettings, NoteType, CommandSpec } from './types.ts';
+import { PluginSettings, NoteType, CommandSpec, RelationType } from './types.ts';
+import {
+  ensureRelationTypes, resolvedRelation, linkResolvesTo, resolveLinktext,
+  relationLinkText, stripLinktext, toEntryArray, collapseEntries,
+} from './relations.ts';
+import { RelationTargetModal } from './ui/relation-target-modal.ts';
 import { isUrl, nameToCommandSlug, stringifyFrontmatterValue } from './utils/helpers.ts';
 import { fetchPageTitle } from './utils/fetch-title.ts';
 import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
@@ -17,6 +22,21 @@ import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
 type CommandRef = { name: string };
+
+/** One relation entry found in a note's frontmatter (see listRelationsForFile). */
+type RelationRef = {
+  /** Frontmatter key on the note this relation was read from. */
+  ownKey: string;
+  /** Frontmatter key on the other note (for removing the back-link). */
+  otherKey: string;
+  /** Human label for the menu, e.g. "Related to" or "Blocked by". */
+  label: string;
+  direction: 'forward' | 'reverse';
+  /** The raw link text, stripped of `[[ ]]` / alias. */
+  linktext: string;
+  /** Resolved target file, or null if the link is unresolved. */
+  targetFile: TFile | null;
+};
 
 export class FilteredFileCommandsPlugin extends Plugin {
   settings!: PluginSettings;
@@ -156,6 +176,57 @@ export class FilteredFileCommandsPlugin extends Plugin {
             });
           }
         });
+        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+           End of the Menu.setSubmenu reflection block. */
+      })
+    );
+
+    // ── "Mark as…" / "Unmark…" relation menu ───────────────────────────────────
+    this.registerEvent(
+      this.app.workspace.on('file-menu', (menu, file) => {
+        if (!(file instanceof TFile) || file.extension !== 'md') return;
+        if (!this.getNoteTypeForFile(file)) return;
+        const relTypes = this.settings.relationTypes ?? [];
+        if (relTypes.length === 0) return;
+        const noteTypes = this.settings.noteTypes;
+        const existing  = this.listRelationsForFile(file);
+
+        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+           `setSubmenu` isn't part of the public Obsidian Menu typings. */
+        menu.addItem((item) => {
+          item.setTitle('Mark as…').setIcon('link');
+          const relMenu = (item as any).setSubmenu();
+          for (const rt of relTypes) {
+            relMenu.addItem((relItem: any) => {
+              relItem.setTitle(rt.name || 'Untitled relation');
+              const typeMenu = relItem.setSubmenu();
+              typeMenu.addItem((i: any) => {
+                i.setTitle('Any note…')
+                  .onClick(() => this.pickRelationTarget(file, rt, this.app.vault.getMarkdownFiles()));
+              });
+              if (noteTypes.length > 0) typeMenu.addSeparator();
+              for (const nt of noteTypes) {
+                typeMenu.addItem((i: any) => {
+                  i.setTitle(nt.name || 'Untitled note type')
+                    .onClick(() => this.pickRelationTarget(file, rt, this.getNoteTypeFiles(nt)));
+                });
+              }
+            });
+          }
+        });
+
+        if (existing.length > 0) {
+          menu.addItem((item) => {
+            item.setTitle('Unmark…').setIcon('unlink');
+            const unmarkMenu = (item as any).setSubmenu();
+            for (const rel of existing) {
+              unmarkMenu.addItem((i: any) => {
+                i.setTitle(`${rel.label}: ${rel.targetFile ? rel.targetFile.basename : rel.linktext}`)
+                  .onClick(() => { void this.removeRelation(file, rel); });
+              });
+            }
+          });
+        }
         /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
            End of the Menu.setSubmenu reflection block. */
       })
@@ -360,20 +431,29 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
   }
 
-  getNoteTypeFiles(noteType: NoteType): TFile[] {
-    const filters  = noteType.matchFilters ?? [];
+  /** True when `file` is an instance of `noteType` (detection filters, else save folder). */
+  fileMatchesNoteType(file: TFile, noteType: NoteType): boolean {
+    const filters   = noteType.matchFilters ?? [];
     const matchMode = noteType.matchMode ?? 'all';
-    return this.app.vault.getMarkdownFiles().filter((file) => {
-      if (filters.length > 0) {
-        const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-        const results = filters.map((f) => this.evaluateFilter(fm, f, file));
-        return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
-      } else if (noteType.saveFolder?.trim()) {
-        const prefix = noteType.saveFolder.trim().replace(/\/$/, '') + '/';
-        return file.path.startsWith(prefix);
-      }
-      return false;
-    });
+    if (filters.length > 0) {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+      const results = filters.map((f) => this.evaluateFilter(fm, f, file));
+      return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
+    }
+    if (noteType.saveFolder?.trim()) {
+      const prefix = noteType.saveFolder.trim().replace(/\/$/, '') + '/';
+      return file.path.startsWith(prefix);
+    }
+    return false;
+  }
+
+  getNoteTypeFiles(noteType: NoteType): TFile[] {
+    return this.app.vault.getMarkdownFiles().filter((file) => this.fileMatchesNoteType(file, noteType));
+  }
+
+  /** The first note type whose detection rules match `file`, or undefined. */
+  getNoteTypeForFile(file: TFile): NoteType | undefined {
+    return this.settings.noteTypes.find((nt) => this.fileMatchesNoteType(file, nt));
   }
 
   evaluateFilter(fm: Record<string, unknown>, filter: { key: string; operator: string; value: string }, file?: TFile): boolean {
@@ -395,6 +475,96 @@ export class FilteredFileCommandsPlugin extends Plugin {
         : stringifyFrontmatterValue(raw).toLowerCase().includes(value.toLowerCase());
       default: return true;
     }
+  }
+
+  // ── Relations ─────────────────────────────────────────────────────────────────
+
+  /** Open the note picker for a relation, then write the relation on both notes. */
+  pickRelationTarget(source: TFile, rt: RelationType, candidates: TFile[]): void {
+    const files = candidates.filter((f) => f.path !== source.path);
+    if (files.length === 0) {
+      new Notice('No notes available to relate to.');
+      return;
+    }
+    const { forwardName } = resolvedRelation(rt);
+    new RelationTargetModal(this.app, files, forwardName, (target) => {
+      void this.addRelation(source, target, rt);
+    }).open();
+  }
+
+  /** Add a link to `target` under `key` in `file`'s frontmatter. Returns true if written. */
+  private async writeRelationLink(file: TFile, key: string, target: TFile): Promise<boolean> {
+    let added = false;
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      const entries = toEntryArray(fm[key]);
+      if (entries.some((e) => linkResolvesTo(this.app, e, file.path, target))) return;
+      entries.push(relationLinkText(this.app, target, file.path));
+      fm[key] = collapseEntries(entries);
+      added = true;
+    });
+    return added;
+  }
+
+  async addRelation(source: TFile, target: TFile, rt: RelationType): Promise<void> {
+    const { forwardKey, reverseKey } = resolvedRelation(rt);
+    if (!forwardKey) {
+      new Notice('This relation type has no frontmatter key set.');
+      return;
+    }
+    const wroteForward = await this.writeRelationLink(source, forwardKey, target);
+    const wroteReverse = await this.writeRelationLink(target, reverseKey, source);
+    new Notice(
+      wroteForward || wroteReverse
+        ? `Related: ${source.basename} → ${target.basename}`
+        : 'Already related.',
+    );
+  }
+
+  /** Every relation entry in `file`'s frontmatter, across all relation types. */
+  listRelationsForFile(file: TFile): RelationRef[] {
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!fm) return [];
+    const out: RelationRef[] = [];
+    const seen = new Set<string>();
+    const scan = (
+      ownKey: string, otherKey: string, label: string, direction: 'forward' | 'reverse',
+    ): void => {
+      if (!ownKey) return;
+      for (const raw of toEntryArray(fm[ownKey])) {
+        const linktext = stripLinktext(raw);
+        if (!linktext) continue;
+        const targetFile = resolveLinktext(this.app, raw, file.path);
+        const dedupe = `${ownKey}::${targetFile ? targetFile.path : linktext.toLowerCase()}`;
+        if (seen.has(dedupe)) continue;
+        seen.add(dedupe);
+        out.push({ ownKey, otherKey, label, direction, linktext, targetFile });
+      }
+    };
+    for (const rt of this.settings.relationTypes ?? []) {
+      const { forwardKey, reverseKey, forwardName, reverseName, symmetric } = resolvedRelation(rt);
+      scan(forwardKey, reverseKey, forwardName, 'forward');
+      if (!symmetric) scan(reverseKey, forwardKey, reverseName, 'reverse');
+    }
+    return out;
+  }
+
+  async removeRelation(file: TFile, rel: RelationRef): Promise<void> {
+    const removeFrom = async (f: TFile, key: string, matchTarget: TFile | null, literal: string): Promise<void> => {
+      await this.app.fileManager.processFrontMatter(f, (fm: Record<string, unknown>) => {
+        if (!(key in fm)) return;
+        const kept = toEntryArray(fm[key]).filter((e) =>
+          matchTarget
+            ? !linkResolvesTo(this.app, e, f.path, matchTarget)
+            : stripLinktext(e).toLowerCase() !== literal.toLowerCase(),
+        );
+        const collapsed = collapseEntries(kept);
+        if (collapsed === undefined) delete fm[key];
+        else fm[key] = collapsed;
+      });
+    };
+    await removeFrom(file, rel.ownKey, rel.targetFile, rel.linktext);
+    if (rel.targetFile) await removeFrom(rel.targetFile, rel.otherKey, file, file.basename);
+    new Notice('Relation removed.');
   }
 
   // ── Note type commands ────────────────────────────────────────────────────────
@@ -685,6 +855,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
     delete raw.objectTypes;
 
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+    // Object.assign is shallow: when data.json omits a key the value is still the
+    // shared DEFAULT_SETTINGS reference. Detach the ones we mutate in place.
+    if (this.settings.relationTypes === DEFAULT_SETTINGS.relationTypes) this.settings.relationTypes = [];
     if (!this.settings.noteTypes)                     this.settings.noteTypes = [];
     if (this.settings.templatesFolder === undefined)  this.settings.templatesFolder = '';
     if (this.settings.triggerKey === undefined)       this.settings.triggerKey = '';
@@ -724,6 +897,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
         needsSave = true;
       }
     }
+
+    if (ensureRelationTypes(this.settings)) needsSave = true;
 
     if (needsSave) await this.saveSettings();
   }

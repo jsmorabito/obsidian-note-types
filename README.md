@@ -26,6 +26,9 @@ Enable *Styled links* on a note type to apply a CSS class (`ffc-note-link`) to e
 **Hover preview card**  
 Enable *Preview fields* on a type and hovering a styled wikilink shows a popup card with those frontmatter values (and an optional image).
 
+**Relations**  
+Right-click a note that belongs to a note type and choose **Mark as… → `<relation>` → `<note type>`** to pick another note and link the two. The link is written into both notes' frontmatter — under the relation's key on the note you marked, and under its reverse key on the target. A generic **Related to** relation is built in (symmetric, key `related_to`); define your own (e.g. *Blocks* / *Blocked by*) under *Settings → Note Types → Relations*. **Unmark…** on the same menu lists a note's existing relations and removes one from both sides.
+
 **Filtered file commands**  
 Create arbitrary command-palette commands that open a fuzzy picker showing only files whose frontmatter matches your filters (AND / OR, with `equals`, `not_equals`, `contains`, `exists` operators). Optionally restrict to specific file extensions (e.g. `md, canvas`).
 
@@ -51,6 +54,7 @@ Open *Settings → Note Types* to configure:
 - **Templates folder** — path to your templates folder (leave blank to auto-detect from the core Templates plugin).
 - **Fetch page title from URL** — off by default. When on, creating a note from a highlighted URL fetches the linked page (one network request, 8-second timeout) to pre-fill the title.
 - **Note Types** — define, edit, and delete your note types.
+- **Relations** — define relation types (name, frontmatter key, reverse label/key). The built-in **Related to** can be re-keyed but not deleted.
 - **Filtered Files Widget** — open the widget, set a display-name frontmatter key, or reset all sections.
 
 ---

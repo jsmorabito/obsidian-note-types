@@ -24,10 +24,10 @@ __export(main_exports, {
   default: () => main_default
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian20 = require("obsidian");
+var import_obsidian22 = require("obsidian");
 
 // src/settings.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/ui/note-type-settings-page.ts
 var import_obsidian6 = require("obsidian");
@@ -925,6 +925,150 @@ var FilteredCommandDeleteModal = class extends import_obsidian9.Modal {
   }
 };
 
+// src/ui/relation-type-modal.ts
+var import_obsidian10 = require("obsidian");
+var RelationTypeModal = class extends import_obsidian10.Modal {
+  constructor(app, plugin, rt, onDismiss) {
+    super(app);
+    this.plugin = plugin;
+    this.rt = rt;
+    this.onDismiss = onDismiss;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.addClass("ffc-item-modal");
+    const rt = this.rt;
+    contentEl.createEl("h2", { text: "Relation type", cls: "ffc-modal-title" });
+    if (rt.builtin) {
+      contentEl.createEl("p", {
+        text: "The built-in generic relation. Every note type can use it. You can change its labels and keys, but it can\u2019t be removed.",
+        cls: "ffc-hint"
+      });
+    }
+    new import_obsidian10.Setting(contentEl).setName("Name").setDesc('Label shown in the "Mark as\u2026" menu, e.g. "Related to" or "Blocks".').addText((text) => {
+      var _a;
+      return text.setPlaceholder("E.g. Blocks").setValue((_a = rt.name) != null ? _a : "").onChange(async (value) => {
+        rt.name = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian10.Setting(contentEl).setName("Frontmatter key").setDesc('Property key written on the note you mark, e.g. "blocks".').addText((text) => {
+      var _a;
+      return text.setPlaceholder("E.g. blocks").setValue((_a = rt.frontmatterKey) != null ? _a : "").onChange(async (value) => {
+        rt.frontmatterKey = value.trim();
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian10.Setting(contentEl).setName("Reverse label").setDesc('Label from the target\u2019s side, e.g. "Blocked by". Leave blank if the relation reads the same both ways.').addText((text) => {
+      var _a;
+      return text.setPlaceholder("E.g. Blocked by").setValue((_a = rt.reverseName) != null ? _a : "").onChange(async (value) => {
+        rt.reverseName = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian10.Setting(contentEl).setName("Reverse frontmatter key").setDesc("Property key written back on the target note. Leave blank to reuse the key above, or to derive one from the reverse label when that label differs.").addText((text) => {
+      var _a;
+      return text.setPlaceholder("E.g. blocked_by").setValue((_a = rt.reverseKey) != null ? _a : "").onChange(async (value) => {
+        rt.reverseKey = value.trim();
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian10.Setting(contentEl).addButton((btn) => btn.setButtonText("Done").setCta().onClick(() => this.close()));
+  }
+  onClose() {
+    var _a;
+    this.contentEl.empty();
+    (_a = this.onDismiss) == null ? void 0 : _a.call(this);
+  }
+};
+
+// src/relations.ts
+var BUILTIN_RELATION_TYPE_ID = "related-to";
+function defaultRelationType() {
+  return {
+    id: BUILTIN_RELATION_TYPE_ID,
+    name: "Related to",
+    frontmatterKey: "related_to",
+    reverseName: "",
+    reverseKey: "",
+    builtin: true
+  };
+}
+function ensureRelationTypes(settings) {
+  let changed = false;
+  if (!Array.isArray(settings.relationTypes)) {
+    settings.relationTypes = [];
+    changed = true;
+  }
+  const builtin = settings.relationTypes.find((rt) => rt.id === BUILTIN_RELATION_TYPE_ID);
+  if (!builtin) {
+    settings.relationTypes.unshift(defaultRelationType());
+    changed = true;
+  } else if (!builtin.builtin) {
+    builtin.builtin = true;
+    changed = true;
+  }
+  for (const rt of settings.relationTypes) {
+    if (rt.reverseName === void 0) {
+      rt.reverseName = "";
+      changed = true;
+    }
+    if (rt.reverseKey === void 0) {
+      rt.reverseKey = "";
+      changed = true;
+    }
+  }
+  return changed;
+}
+function slugifyKey(s) {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+function resolvedRelation(rt) {
+  const forwardKey = (rt.frontmatterKey || "").trim();
+  const forwardName = rt.name || "Untitled relation";
+  const reverseName = (rt.reverseName || "").trim() || forwardName;
+  let reverseKey = (rt.reverseKey || "").trim();
+  if (!reverseKey) {
+    reverseKey = reverseName !== forwardName ? slugifyKey(reverseName) || forwardKey : forwardKey;
+  }
+  return { forwardKey, reverseKey, forwardName, reverseName, symmetric: forwardKey === reverseKey };
+}
+function stripLinktext(raw) {
+  let s = stringifyFrontmatterValue2(raw).trim();
+  const m = s.match(/^!?\[\[(.*?)\]\]$/);
+  if (m)
+    s = m[1];
+  s = s.split("|")[0];
+  s = s.split("#")[0];
+  return s.trim();
+}
+function relationLinkText(app, target, fromPath) {
+  return `[[${app.metadataCache.fileToLinktext(target, fromPath, true)}]]`;
+}
+function resolveLinktext(app, raw, fromPath) {
+  const path = stripLinktext(raw);
+  if (!path)
+    return null;
+  return app.metadataCache.getFirstLinkpathDest(path, fromPath);
+}
+function linkResolvesTo(app, raw, fromPath, target) {
+  var _a;
+  return ((_a = resolveLinktext(app, raw, fromPath)) == null ? void 0 : _a.path) === target.path;
+}
+function toEntryArray(value) {
+  if (value == null || value === "")
+    return [];
+  return Array.isArray(value) ? value.slice() : [value];
+}
+function collapseEntries(entries) {
+  if (entries.length === 0)
+    return void 0;
+  if (entries.length === 1)
+    return entries[0];
+  return entries;
+}
+
 // src/settings.ts
 var DEFAULT_SETTINGS = {
   commands: [],
@@ -932,13 +1076,14 @@ var DEFAULT_SETTINGS = {
   filteredWidgetEnabled: false,
   filteredWidgetRibbon: false,
   noteTypes: [],
+  relationTypes: [defaultRelationType()],
   templatesFolder: "",
   triggerKey: "",
   fetchUrlTitles: false,
   ffwSections: [],
   ffwDisplayNameKey: ""
 };
-var MyPluginSettingTab = class extends import_obsidian10.PluginSettingTab {
+var MyPluginSettingTab = class extends import_obsidian11.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -1030,6 +1175,48 @@ var MyPluginSettingTab = class extends import_obsidian10.PluginSettingTab {
             desc: desc || void 0,
             searchable: false,
             action: (_el, index) => this.openNoteTypePage(index)
+          };
+        })
+      },
+      // ── Relations ──────────────────────────────────────────────────────────
+      {
+        type: "list",
+        heading: "Relations",
+        emptyState: "No relation types defined yet.",
+        addItem: {
+          name: "Add relation type",
+          action: () => {
+            void this.addRelationType();
+          }
+        },
+        onReorder: (from, to) => {
+          const list = s.relationTypes;
+          const [moved] = list.splice(from, 1);
+          list.splice(to, 0, moved);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        onDelete: (index) => {
+          var _a;
+          if ((_a = s.relationTypes[index]) == null ? void 0 : _a.builtin) {
+            new import_obsidian11.Notice("The built-in \u201CRelated to\u201D relation can\u2019t be removed.");
+            this.update();
+            return;
+          }
+          s.relationTypes.splice(index, 1);
+          void this.plugin.saveSettings();
+          this.update();
+        },
+        items: s.relationTypes.map((rt) => {
+          const r = resolvedRelation(rt);
+          const desc = r.symmetric ? `key: ${r.forwardKey || "(unset)"}` : `key: ${r.forwardKey || "(unset)"} \xB7 reverse: ${r.reverseName} (${r.reverseKey || "(unset)"})`;
+          return {
+            name: rt.name || "Untitled relation",
+            desc,
+            searchable: false,
+            action: () => {
+              new RelationTypeModal(this.app, this.plugin, rt, () => this.update()).open();
+            }
           };
         })
       },
@@ -1159,6 +1346,20 @@ var MyPluginSettingTab = class extends import_obsidian10.PluginSettingTab {
     this.plugin.registerNoteTypeCommand(s.noteTypes[s.noteTypes.length - 1]);
     this.update();
   }
+  async addRelationType() {
+    const s = this.plugin.settings;
+    const rt = {
+      id: `rel-${Date.now()}`,
+      name: "New relation",
+      frontmatterKey: "",
+      reverseName: "",
+      reverseKey: ""
+    };
+    s.relationTypes.push(rt);
+    await this.plugin.saveSettings();
+    this.update();
+    new RelationTypeModal(this.app, this.plugin, rt, () => this.update()).open();
+  }
   async addFilteredCommand() {
     const s = this.plugin.settings;
     const id = `ffc-command-${Date.now()}`;
@@ -1169,8 +1370,47 @@ var MyPluginSettingTab = class extends import_obsidian10.PluginSettingTab {
   }
 };
 
+// src/ui/relation-target-modal.ts
+var import_obsidian12 = require("obsidian");
+var RelationTargetModal = class extends import_obsidian12.FuzzySuggestModal {
+  constructor(app, files, relationLabel, onChoose) {
+    super(app);
+    this.files = files;
+    this.onChoose = onChoose;
+    this.setPlaceholder(`${relationLabel}\u2026`);
+    this.setInstructions([
+      { command: "\u2191\u2193", purpose: "navigate" },
+      { command: "\u21B5", purpose: "relate" },
+      { command: "esc", purpose: "dismiss" }
+    ]);
+  }
+  getTitle(file) {
+    var _a, _b;
+    const title = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b["title"];
+    return title ? stringifyFrontmatterValue2(title) : file.basename;
+  }
+  getItems() {
+    return this.files;
+  }
+  getItemText(file) {
+    return `${this.getTitle(file)} ${file.path}`;
+  }
+  renderSuggestion(match, el) {
+    var _a;
+    const file = match.item;
+    el.createSpan({ text: this.getTitle(file), cls: "suggestion-title" });
+    const folder = (_a = file.parent) == null ? void 0 : _a.path;
+    if (folder && folder !== "/") {
+      el.createSpan({ text: folder, cls: "suggestion-note" });
+    }
+  }
+  onChooseItem(file) {
+    this.onChoose(file);
+  }
+};
+
 // src/utils/fetch-title.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 async function fetchPageTitle(url, timeoutMs = 8e3) {
   return Promise.race([
     extractTitle(url),
@@ -1181,7 +1421,7 @@ async function extractTitle(url) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
   let res;
   try {
-    res = await (0, import_obsidian11.requestUrl)({ url, method: "GET", throw: false });
+    res = await (0, import_obsidian13.requestUrl)({ url, method: "GET", throw: false });
   } catch (e) {
     return null;
   }
@@ -1249,7 +1489,7 @@ function statusSvg(status) {
 }
 
 // src/utils/ffw-utils.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 var FFW_VIEW_TYPE = "filtered-files-widget-view";
 var FFW_FILTER_TYPE_LABELS = {
   tag: "Tag",
@@ -1361,7 +1601,7 @@ function ffwGetIconicIcon(app, file) {
 }
 function ffwSetIconEl(el, icon, color) {
   if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(icon)) {
-    (0, import_obsidian12.setIcon)(el, icon);
+    (0, import_obsidian14.setIcon)(el, icon);
   } else {
     el.setText(icon);
     el.addClass("ffw-file-icon--emoji");
@@ -1390,7 +1630,7 @@ function ffwEvalTagFilter(cache, filter) {
   const tag = ffwNormalizeTag(filter.tag);
   if (!tag)
     return true;
-  const allTags = cache ? ((_a = (0, import_obsidian12.getAllTags)(cache)) != null ? _a : []).map(ffwNormalizeTag) : [];
+  const allTags = cache ? ((_a = (0, import_obsidian14.getAllTags)(cache)) != null ? _a : []).map(ffwNormalizeTag) : [];
   const has = allTags.includes(tag);
   return filter.include ? has : !has;
 }
@@ -1543,8 +1783,8 @@ function ffwGetSectionFiles(app, section) {
 }
 
 // src/ui/filtered-file-modal.ts
-var import_obsidian13 = require("obsidian");
-var FilteredFileModal = class extends import_obsidian13.FuzzySuggestModal {
+var import_obsidian15 = require("obsidian");
+var FilteredFileModal = class extends import_obsidian15.FuzzySuggestModal {
   constructor(app, files, typeName) {
     super(app);
     this.files = files;
@@ -1582,8 +1822,8 @@ var FilteredFileModal = class extends import_obsidian13.FuzzySuggestModal {
 };
 
 // src/ui/new-note-modal.ts
-var import_obsidian14 = require("obsidian");
-var NewNoteModal = class extends import_obsidian14.Modal {
+var import_obsidian16 = require("obsidian");
+var NewNoteModal = class extends import_obsidian16.Modal {
   constructor(app, noteType, onSubmit, initialTitle = "", urlSelection = "", titlePromise = null) {
     super(app);
     this.fieldValues = {};
@@ -1601,7 +1841,7 @@ var NewNoteModal = class extends import_obsidian14.Modal {
     const { contentEl } = this;
     contentEl.addClass("ffc-new-note-modal");
     contentEl.createEl("h2", { text: `New ${this.noteType.name}` });
-    new import_obsidian14.Setting(contentEl).setName("Title").addText((text) => {
+    new import_obsidian16.Setting(contentEl).setName("Title").addText((text) => {
       const basePlaceholder = `Enter ${this.noteType.name} title\u2026`;
       text.setPlaceholder(this.titlePromise ? "Fetching title\u2026" : basePlaceholder).setValue(this.titleValue).onChange((v) => {
         this.titleValue = v;
@@ -1631,7 +1871,7 @@ var NewNoteModal = class extends import_obsidian14.Modal {
         });
       }
     });
-    const descSetting = new import_obsidian14.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+    const descSetting = new import_obsidian16.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
       ta.setPlaceholder("Optional description\u2026").onChange((v) => {
         this.descriptionValue = v;
       });
@@ -1641,12 +1881,12 @@ var NewNoteModal = class extends import_obsidian14.Modal {
       });
     });
     renderFieldInputs(contentEl, this.app, this.noteType, this.fieldValues, () => this.submit(), descSetting.settingEl);
-    new import_obsidian14.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+    new import_obsidian16.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
   }
   submit() {
     const title = this.titleValue.trim();
     if (!title) {
-      new import_obsidian14.Notice("Please enter a title.");
+      new import_obsidian16.Notice("Please enter a title.");
       return;
     }
     this.close();
@@ -1658,8 +1898,8 @@ var NewNoteModal = class extends import_obsidian14.Modal {
 };
 
 // src/ui/combined-new-note-modal.ts
-var import_obsidian15 = require("obsidian");
-var CombinedNewNoteModal = class extends import_obsidian15.Modal {
+var import_obsidian17 = require("obsidian");
+var CombinedNewNoteModal = class extends import_obsidian17.Modal {
   constructor(app, noteTypes, onSubmit, initialTitle = "", urlSelection = "", titlePromise = null) {
     super(app);
     this.titleValue = "";
@@ -1690,7 +1930,7 @@ var CombinedNewNoteModal = class extends import_obsidian15.Modal {
     contentEl.addClass("ffc-new-note-modal");
     contentEl.createEl("h2", { text: "New note" });
     let descSettingEl = null;
-    new import_obsidian15.Setting(contentEl).setName("Type").addDropdown((dd) => {
+    new import_obsidian17.Setting(contentEl).setName("Type").addDropdown((dd) => {
       for (const obj of this.noteTypes)
         dd.addOption(obj.id, obj.name);
       dd.setValue(this.selectedType.id);
@@ -1702,7 +1942,7 @@ var CombinedNewNoteModal = class extends import_obsidian15.Modal {
         renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
       });
     });
-    new import_obsidian15.Setting(contentEl).setName("Title").addText((text) => {
+    new import_obsidian17.Setting(contentEl).setName("Title").addText((text) => {
       text.setPlaceholder(this.titlePromise ? "Fetching title\u2026" : "Enter title\u2026").setValue(this.initialTitle).onChange((v) => {
         this.titleValue = v;
         this.titleTouched = true;
@@ -1732,7 +1972,7 @@ var CombinedNewNoteModal = class extends import_obsidian15.Modal {
         });
       }
     });
-    const descSetting = new import_obsidian15.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
+    const descSetting = new import_obsidian17.Setting(contentEl).setName("Description").setDesc("Added to the body of the created page").addTextArea((ta) => {
       ta.setPlaceholder("Optional description\u2026").onChange((v) => {
         this.descriptionValue = v;
       });
@@ -1743,12 +1983,12 @@ var CombinedNewNoteModal = class extends import_obsidian15.Modal {
     });
     descSettingEl = descSetting.settingEl;
     renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
-    new import_obsidian15.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+    new import_obsidian17.Setting(contentEl).addButton((btn) => btn.setButtonText("Create").setCta().onClick(() => this.submit())).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
   }
   submit() {
     const title = this.titleValue.trim();
     if (!title) {
-      new import_obsidian15.Notice("Please enter a title.");
+      new import_obsidian17.Notice("Please enter a title.");
       return;
     }
     this.close();
@@ -1760,8 +2000,8 @@ var CombinedNewNoteModal = class extends import_obsidian15.Modal {
 };
 
 // src/ui/note-type-suggest.ts
-var import_obsidian16 = require("obsidian");
-var NoteTypeSuggest = class extends import_obsidian16.EditorSuggest {
+var import_obsidian18 = require("obsidian");
+var NoteTypeSuggest = class extends import_obsidian18.EditorSuggest {
   constructor(app, plugin) {
     super(app);
     this.plugin = plugin;
@@ -2083,8 +2323,8 @@ var NotePreviewPopup = class {
 };
 
 // src/ui/canvas-note-switcher.ts
-var import_obsidian17 = require("obsidian");
-var CanvasNoteSwitcher = class extends import_obsidian17.FuzzySuggestModal {
+var import_obsidian19 = require("obsidian");
+var CanvasNoteSwitcher = class extends import_obsidian19.FuzzySuggestModal {
   constructor(app, plugin, canvas, dropPos) {
     super(app);
     this.plugin = plugin;
@@ -2176,9 +2416,9 @@ ${label}: ${displayVal}`;
       (_g = (_f = this.canvas).deselectAll) == null ? void 0 : _g.call(_f);
       if (node)
         (_i = (_h = this.canvas).selectOnly) == null ? void 0 : _i.call(_h, node);
-      new import_obsidian17.Notice(`Added "${title}" to canvas`);
+      new import_obsidian19.Notice(`Added "${title}" to canvas`);
     } catch (err) {
-      new import_obsidian17.Notice(`Could not add card to canvas: ${err.message}`);
+      new import_obsidian19.Notice(`Could not add card to canvas: ${err.message}`);
     }
   }
   _getViewportCenter() {
@@ -2205,11 +2445,11 @@ ${label}: ${displayVal}`;
 };
 
 // src/views/filtered-files-widget.ts
-var import_obsidian19 = require("obsidian");
+var import_obsidian21 = require("obsidian");
 
 // src/views/ffw-section-edit-modal.ts
-var import_obsidian18 = require("obsidian");
-var FfwSectionEditModal = class extends import_obsidian18.Modal {
+var import_obsidian20 = require("obsidian");
+var FfwSectionEditModal = class extends import_obsidian20.Modal {
   constructor(app, section, onSave) {
     super(app);
     this.filtersContainer = null;
@@ -2222,7 +2462,7 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
     const { contentEl, titleEl } = this;
     contentEl.addClass("ffw-modal");
     titleEl.setText(this.isNew ? "Add filter section" : "Edit filter section");
-    new import_obsidian18.Setting(contentEl).setName("Title").setDesc("Shown as the section header in the widget.").addText(
+    new import_obsidian20.Setting(contentEl).setName("Title").setDesc("Shown as the section header in the widget.").addText(
       (text) => text.setPlaceholder("Active projects").setValue(this.working.title).onChange((v) => {
         this.working.title = v;
       })
@@ -2233,13 +2473,13 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
     this.renderFilterRows();
     const addRow = contentEl.createDiv({ cls: "ffw-add-filter-row" });
     for (const type of ["tag", "frontmatter", "path", "name"]) {
-      new import_obsidian18.ButtonComponent(addRow).setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`).onClick(() => {
+      new import_obsidian20.ButtonComponent(addRow).setButtonText(`+ ${FFW_FILTER_TYPE_LABELS[type]}`).onClick(() => {
         this.working.filters.push(ffwDefaultFilter(type));
         this.renderFilterRows();
       });
     }
     contentEl.createEl("h3", { text: "Sort" });
-    new import_obsidian18.Setting(contentEl).setName("Sort by").addDropdown((dd) => {
+    new import_obsidian20.Setting(contentEl).setName("Sort by").addDropdown((dd) => {
       for (const opt of FFW_SORT_OPTIONS)
         dd.addOption(opt.value, opt.label);
       dd.setValue(this.working.sort.field).onChange((v) => {
@@ -2248,7 +2488,7 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
       });
     });
     this.frontmatterKeyContainer = contentEl.createDiv();
-    new import_obsidian18.Setting(this.frontmatterKeyContainer).setName("Frontmatter sort key").setDesc("Required when sorting by a frontmatter field.").addText(
+    new import_obsidian20.Setting(this.frontmatterKeyContainer).setName("Frontmatter sort key").setDesc("Required when sorting by a frontmatter field.").addText(
       (text) => {
         var _a;
         return text.setPlaceholder("Due").setValue((_a = this.working.sort.frontmatterKey) != null ? _a : "").onChange((v) => {
@@ -2257,15 +2497,15 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
       }
     );
     this.updateFrontmatterKeyVisibility();
-    new import_obsidian18.Setting(contentEl).setName("Result limit").setDesc("Maximum number of files to show. 0 means unlimited.").addText(
+    new import_obsidian20.Setting(contentEl).setName("Result limit").setDesc("Maximum number of files to show. 0 means unlimited.").addText(
       (text) => text.setPlaceholder("0").setValue(String(this.working.maxResults)).onChange((v) => {
         const n = parseInt(v, 10);
         this.working.maxResults = Number.isFinite(n) && n > 0 ? n : 0;
       })
     );
     const btnRow = contentEl.createDiv({ cls: "modal-button-container" });
-    new import_obsidian18.ButtonComponent(btnRow).setButtonText("Cancel").onClick(() => this.close());
-    new import_obsidian18.ButtonComponent(btnRow).setButtonText(this.isNew ? "Add section" : "Save").setCta().onClick(() => this.handleSave());
+    new import_obsidian20.ButtonComponent(btnRow).setButtonText("Cancel").onClick(() => this.close());
+    new import_obsidian20.ButtonComponent(btnRow).setButtonText(this.isNew ? "Add section" : "Save").setCta().onClick(() => this.handleSave());
   }
   onClose() {
     this.contentEl.empty();
@@ -2411,15 +2651,15 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
   handleSave() {
     const title = this.working.title.trim();
     if (!title) {
-      new import_obsidian18.Notice("Please enter a title for the section.");
+      new import_obsidian20.Notice("Please enter a title for the section.");
       return;
     }
     if (this.working.filters.length === 0) {
-      new import_obsidian18.Notice("Add at least one filter to the section.");
+      new import_obsidian20.Notice("Add at least one filter to the section.");
       return;
     }
     if ((this.working.sort.field === "frontmatter-asc" || this.working.sort.field === "frontmatter-desc") && !this.working.sort.frontmatterKey) {
-      new import_obsidian18.Notice("Please specify a frontmatter key to sort by.");
+      new import_obsidian20.Notice("Please specify a frontmatter key to sort by.");
       return;
     }
     this.working.title = title;
@@ -2429,7 +2669,7 @@ var FfwSectionEditModal = class extends import_obsidian18.Modal {
 };
 
 // src/views/filtered-files-widget.ts
-var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
+var FilteredFilesWidgetView = class extends import_obsidian21.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.query = "";
@@ -2437,7 +2677,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     this.sectionsEl = null;
     this.dragSourceId = null;
     this.plugin = plugin;
-    this.refresh = (0, import_obsidian19.debounce)(() => this.render(), 80, true);
+    this.refresh = (0, import_obsidian21.debounce)(() => this.render(), 80, true);
   }
   getViewType() {
     return FFW_VIEW_TYPE;
@@ -2473,7 +2713,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
   }
   renderHeader(el) {
     const row = el.createDiv({ cls: "ffw-header" }).createDiv({ cls: "ffw-search-row" });
-    const search = new import_obsidian19.SearchComponent(row);
+    const search = new import_obsidian21.SearchComponent(row);
     search.setPlaceholder("Filter...");
     search.setValue(this.query);
     search.onChange((v) => {
@@ -2481,7 +2721,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
       this.renderSections();
     });
     const addBtn = row.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "Add filter section" } });
-    (0, import_obsidian19.setIcon)(addBtn, "plus");
+    (0, import_obsidian21.setIcon)(addBtn, "plus");
     addBtn.addEventListener("click", () => this.openAddModal());
   }
   renderSections() {
@@ -2512,10 +2752,10 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     sectionEl.addEventListener("dragend", () => this.clearDragState());
     const header = sectionEl.createDiv({ cls: "ffw-section-header" });
     const dragHandle = header.createSpan({ cls: "ffw-drag-handle" });
-    (0, import_obsidian19.setIcon)(dragHandle, "grip-vertical");
+    (0, import_obsidian21.setIcon)(dragHandle, "grip-vertical");
     dragHandle.setAttr("aria-label", "Drag to reorder");
     const collapseToggle = header.createSpan({ cls: "ffw-collapse-toggle" });
-    (0, import_obsidian19.setIcon)(collapseToggle, section.collapsed ? "chevron-right" : "chevron-down");
+    (0, import_obsidian21.setIcon)(collapseToggle, section.collapsed ? "chevron-right" : "chevron-down");
     collapseToggle.setAttr("aria-label", section.collapsed ? "Expand section" : "Collapse section");
     collapseToggle.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2557,7 +2797,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     if (iconicIcon == null ? void 0 : iconicIcon.icon) {
       ffwSetIconEl(iconEl, iconicIcon.icon, iconicIcon.color);
     } else {
-      (0, import_obsidian19.setIcon)(iconEl, "file-text");
+      (0, import_obsidian21.setIcon)(iconEl, "file-text");
     }
     const labelEl = row.createDiv({ cls: "ffw-file-label" });
     const key = this.plugin.settings.ffwDisplayNameKey;
@@ -2572,7 +2812,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     });
     row.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const menu = new import_obsidian19.Menu();
+      const menu = new import_obsidian21.Menu();
       menu.addItem((item) => item.setTitle("Open").setIcon("file-text").onClick(() => this.app.workspace.openLinkText(file.path, "", false)));
       menu.addItem((item) => item.setTitle("Open in new tab").setIcon("file-plus").onClick(() => this.app.workspace.openLinkText(file.path, "", true)));
       menu.addItem((item) => item.setTitle("Reveal in file explorer").setIcon("folder").onClick(() => {
@@ -2586,14 +2826,14 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
           } catch (e2) {
           }
         }
-        new import_obsidian19.Notice("Could not reveal file in the file explorer.");
+        new import_obsidian21.Notice("Could not reveal file in the file explorer.");
       }));
       menu.showAtMouseEvent(e);
     });
   }
   addIconButton(el, icon, label, onClick) {
     const btn = el.createEl("button", { cls: "clickable-icon" });
-    (0, import_obsidian19.setIcon)(btn, icon);
+    (0, import_obsidian21.setIcon)(btn, icon);
     btn.setAttr("aria-label", label);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2601,7 +2841,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     });
   }
   openSectionMenu(section, e) {
-    const menu = new import_obsidian19.Menu();
+    const menu = new import_obsidian21.Menu();
     menu.addItem((item) => item.setTitle("Edit").setIcon("pencil").onClick(() => this.openEditModal(section)));
     menu.addItem((item) => item.setTitle("Duplicate").setIcon("copy").onClick(() => this.duplicateSection(section)));
     menu.addSeparator();
@@ -2650,7 +2890,7 @@ var FilteredFilesWidgetView = class extends import_obsidian19.ItemView {
     await this.plugin.saveSettings();
     this.renderSections();
     if (removed)
-      new import_obsidian19.Notice(`Removed "${removed.title}"`);
+      new import_obsidian21.Notice(`Removed "${removed.title}"`);
   }
   // ── Drag-and-drop reorder ─────────────────────────────────────────────────────
   handleDragStart(e, id) {
@@ -2802,7 +3042,7 @@ function buildNoteLinkViewPlugin(ffcPlugin) {
 }
 
 // src/main.ts
-var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
+var FilteredFileCommandsPlugin = class extends import_obsidian22.Plugin {
   constructor() {
     super(...arguments);
     this.commandRefs = {};
@@ -2904,7 +3144,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
               subItem.setTitle(noteType.name).onClick(() => {
                 const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
                 if (!current) {
-                  new import_obsidian20.Notice("Note type not found. Try reloading.");
+                  new import_obsidian22.Notice("Note type not found. Try reloading.");
                   return;
                 }
                 const selIsUrl = isUrl(selection);
@@ -2925,6 +3165,53 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
             });
           }
         });
+      })
+    );
+    this.registerEvent(
+      this.app.workspace.on("file-menu", (menu, file) => {
+        var _a;
+        if (!(file instanceof import_obsidian22.TFile) || file.extension !== "md")
+          return;
+        if (!this.getNoteTypeForFile(file))
+          return;
+        const relTypes = (_a = this.settings.relationTypes) != null ? _a : [];
+        if (relTypes.length === 0)
+          return;
+        const noteTypes = this.settings.noteTypes;
+        const existing = this.listRelationsForFile(file);
+        menu.addItem((item) => {
+          item.setTitle("Mark as\u2026").setIcon("link");
+          const relMenu = item.setSubmenu();
+          for (const rt of relTypes) {
+            relMenu.addItem((relItem) => {
+              relItem.setTitle(rt.name || "Untitled relation");
+              const typeMenu = relItem.setSubmenu();
+              typeMenu.addItem((i) => {
+                i.setTitle("Any note\u2026").onClick(() => this.pickRelationTarget(file, rt, this.app.vault.getMarkdownFiles()));
+              });
+              if (noteTypes.length > 0)
+                typeMenu.addSeparator();
+              for (const nt of noteTypes) {
+                typeMenu.addItem((i) => {
+                  i.setTitle(nt.name || "Untitled note type").onClick(() => this.pickRelationTarget(file, rt, this.getNoteTypeFiles(nt)));
+                });
+              }
+            });
+          }
+        });
+        if (existing.length > 0) {
+          menu.addItem((item) => {
+            item.setTitle("Unmark\u2026").setIcon("unlink");
+            const unmarkMenu = item.setSubmenu();
+            for (const rel of existing) {
+              unmarkMenu.addItem((i) => {
+                i.setTitle(`${rel.label}: ${rel.targetFile ? rel.targetFile.basename : rel.linktext}`).onClick(() => {
+                  void this.removeRelation(file, rel);
+                });
+              });
+            }
+          });
+        }
       })
     );
     this.injectCanvasButtons();
@@ -2958,7 +3245,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
     });
     btn.setAttribute("aria-label", "Add note card");
     btn.setAttribute("data-tooltip-position", "top");
-    (0, import_obsidian20.setIcon)(btn, "shapes");
+    (0, import_obsidian22.setIcon)(btn, "shapes");
     const wrapperEl = (_c = (_b = canvas.wrapperEl) != null ? _b : canvas.canvasEl) != null ? _c : container;
     btn.addEventListener("mousedown", (e) => {
       if (e.button !== 0)
@@ -3078,12 +3365,12 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
       callback: () => {
         const current = this.settings.commands.find((c) => c.id === cmd.id);
         if (!current) {
-          new import_obsidian20.Notice("Note Types: Command not found. Try reloading.");
+          new import_obsidian22.Notice("Note Types: Command not found. Try reloading.");
           return;
         }
         const files = this.getFilteredFiles(current);
         if (files.length === 0) {
-          new import_obsidian20.Notice("Note Types: No files match the current filters.");
+          new import_obsidian22.Notice("Note Types: No files match the current filters.");
           return;
         }
         new FilteredFileModal(this.app, files).open();
@@ -3104,22 +3391,28 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
       return cmd.matchMode === "all" ? results.every(Boolean) : results.some(Boolean);
     });
   }
-  getNoteTypeFiles(noteType) {
-    var _a, _b;
+  /** True when `file` is an instance of `noteType` (detection filters, else save folder). */
+  fileMatchesNoteType(file, noteType) {
+    var _a, _b, _c, _d, _e;
     const filters = (_a = noteType.matchFilters) != null ? _a : [];
     const matchMode = (_b = noteType.matchMode) != null ? _b : "all";
-    return this.app.vault.getMarkdownFiles().filter((file) => {
-      var _a2, _b2, _c;
-      if (filters.length > 0) {
-        const fm = (_b2 = (_a2 = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a2.frontmatter) != null ? _b2 : {};
-        const results = filters.map((f) => this.evaluateFilter(fm, f, file));
-        return matchMode === "all" ? results.every(Boolean) : results.some(Boolean);
-      } else if ((_c = noteType.saveFolder) == null ? void 0 : _c.trim()) {
-        const prefix = noteType.saveFolder.trim().replace(/\/$/, "") + "/";
-        return file.path.startsWith(prefix);
-      }
-      return false;
-    });
+    if (filters.length > 0) {
+      const fm = (_d = (_c = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _c.frontmatter) != null ? _d : {};
+      const results = filters.map((f) => this.evaluateFilter(fm, f, file));
+      return matchMode === "all" ? results.every(Boolean) : results.some(Boolean);
+    }
+    if ((_e = noteType.saveFolder) == null ? void 0 : _e.trim()) {
+      const prefix = noteType.saveFolder.trim().replace(/\/$/, "") + "/";
+      return file.path.startsWith(prefix);
+    }
+    return false;
+  }
+  getNoteTypeFiles(noteType) {
+    return this.app.vault.getMarkdownFiles().filter((file) => this.fileMatchesNoteType(file, noteType));
+  }
+  /** The first note type whose detection rules match `file`, or undefined. */
+  getNoteTypeForFile(file) {
+    return this.settings.noteTypes.find((nt) => this.fileMatchesNoteType(file, nt));
   }
   evaluateFilter(fm, filter, file) {
     const { key, operator, value } = filter;
@@ -3146,6 +3439,95 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
         return true;
     }
   }
+  // ── Relations ─────────────────────────────────────────────────────────────────
+  /** Open the note picker for a relation, then write the relation on both notes. */
+  pickRelationTarget(source, rt, candidates) {
+    const files = candidates.filter((f) => f.path !== source.path);
+    if (files.length === 0) {
+      new import_obsidian22.Notice("No notes available to relate to.");
+      return;
+    }
+    const { forwardName } = resolvedRelation(rt);
+    new RelationTargetModal(this.app, files, forwardName, (target) => {
+      void this.addRelation(source, target, rt);
+    }).open();
+  }
+  /** Add a link to `target` under `key` in `file`'s frontmatter. Returns true if written. */
+  async writeRelationLink(file, key, target) {
+    let added = false;
+    await this.app.fileManager.processFrontMatter(file, (fm) => {
+      const entries = toEntryArray(fm[key]);
+      if (entries.some((e) => linkResolvesTo(this.app, e, file.path, target)))
+        return;
+      entries.push(relationLinkText(this.app, target, file.path));
+      fm[key] = collapseEntries(entries);
+      added = true;
+    });
+    return added;
+  }
+  async addRelation(source, target, rt) {
+    const { forwardKey, reverseKey } = resolvedRelation(rt);
+    if (!forwardKey) {
+      new import_obsidian22.Notice("This relation type has no frontmatter key set.");
+      return;
+    }
+    const wroteForward = await this.writeRelationLink(source, forwardKey, target);
+    const wroteReverse = await this.writeRelationLink(target, reverseKey, source);
+    new import_obsidian22.Notice(
+      wroteForward || wroteReverse ? `Related: ${source.basename} \u2192 ${target.basename}` : "Already related."
+    );
+  }
+  /** Every relation entry in `file`'s frontmatter, across all relation types. */
+  listRelationsForFile(file) {
+    var _a, _b;
+    const fm = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter;
+    if (!fm)
+      return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    const scan = (ownKey, otherKey, label, direction) => {
+      if (!ownKey)
+        return;
+      for (const raw of toEntryArray(fm[ownKey])) {
+        const linktext = stripLinktext(raw);
+        if (!linktext)
+          continue;
+        const targetFile = resolveLinktext(this.app, raw, file.path);
+        const dedupe = `${ownKey}::${targetFile ? targetFile.path : linktext.toLowerCase()}`;
+        if (seen.has(dedupe))
+          continue;
+        seen.add(dedupe);
+        out.push({ ownKey, otherKey, label, direction, linktext, targetFile });
+      }
+    };
+    for (const rt of (_b = this.settings.relationTypes) != null ? _b : []) {
+      const { forwardKey, reverseKey, forwardName, reverseName, symmetric } = resolvedRelation(rt);
+      scan(forwardKey, reverseKey, forwardName, "forward");
+      if (!symmetric)
+        scan(reverseKey, forwardKey, reverseName, "reverse");
+    }
+    return out;
+  }
+  async removeRelation(file, rel) {
+    const removeFrom = async (f, key, matchTarget, literal) => {
+      await this.app.fileManager.processFrontMatter(f, (fm) => {
+        if (!(key in fm))
+          return;
+        const kept = toEntryArray(fm[key]).filter(
+          (e) => matchTarget ? !linkResolvesTo(this.app, e, f.path, matchTarget) : stripLinktext(e).toLowerCase() !== literal.toLowerCase()
+        );
+        const collapsed = collapseEntries(kept);
+        if (collapsed === void 0)
+          delete fm[key];
+        else
+          fm[key] = collapsed;
+      });
+    };
+    await removeFrom(file, rel.ownKey, rel.targetFile, rel.linktext);
+    if (rel.targetFile)
+      await removeFrom(rel.targetFile, rel.otherKey, file, file.basename);
+    new import_obsidian22.Notice("Relation removed.");
+  }
   // ── Note type commands ────────────────────────────────────────────────────────
   registerNoteTypeCommand(noteType) {
     const cmdId = `ffc-notetype-${noteType.commandSlug}`;
@@ -3157,7 +3539,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
         if (!current) {
-          new import_obsidian20.Notice("Note type not found. Try reloading.");
+          new import_obsidian22.Notice("Note type not found. Try reloading.");
           return;
         }
         new NewNoteModal(
@@ -3180,12 +3562,12 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
         if (!current) {
-          new import_obsidian20.Notice("Note Types: Note type not found. Try reloading.");
+          new import_obsidian22.Notice("Note Types: Note type not found. Try reloading.");
           return;
         }
         const files = this.getNoteTypeFiles(current);
         if (files.length === 0) {
-          new import_obsidian20.Notice("Note Types: No files match this note type.");
+          new import_obsidian22.Notice("Note Types: No files match this note type.");
           return;
         }
         new FilteredFileModal(this.app, files, current.name).open();
@@ -3201,7 +3583,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
       callback: () => {
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new import_obsidian20.Notice("No note types defined. Add one in the Note Types settings.");
+          new import_obsidian22.Notice("No note types defined. Add one in the Note Types settings.");
           return;
         }
         if (types.length === 1) {
@@ -3226,7 +3608,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
         var _a, _b;
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new import_obsidian20.Notice("No note types defined. Add one in the Note Types settings.");
+          new import_obsidian22.Notice("No note types defined. Add one in the Note Types settings.");
           return;
         }
         const selection = (_b = (_a = editor.getSelection()) == null ? void 0 : _a.trim()) != null ? _b : "";
@@ -3260,16 +3642,16 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
     const saveFolder = (_b = (_a = noteType.saveFolder) == null ? void 0 : _a.trim()) != null ? _b : "";
     const filePath = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
     if (this.app.vault.getAbstractFileByPath(filePath)) {
-      new import_obsidian20.Notice(`A file named "${title}" already exists at that location.`);
+      new import_obsidian22.Notice(`A file named "${title}" already exists at that location.`);
       return;
     }
     let content = "";
     if (noteType.templatePath) {
       const tplFile = this.app.vault.getAbstractFileByPath(noteType.templatePath);
-      if (tplFile instanceof import_obsidian20.TFile) {
+      if (tplFile instanceof import_obsidian22.TFile) {
         content = await this.app.vault.read(tplFile);
       } else {
-        new import_obsidian20.Notice(`Template not found: ${noteType.templatePath}`);
+        new import_obsidian22.Notice(`Template not found: ${noteType.templatePath}`);
       }
     }
     const now = new Date();
@@ -3286,7 +3668,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
     }
     try {
       const newFile = await this.app.vault.create(filePath, content);
-      const notice = new import_obsidian20.Notice("", 6e3);
+      const notice = new import_obsidian22.Notice("", 6e3);
       const frag = notice.messageEl.createSpan();
       frag.appendText("Created: ");
       const link = frag.createEl("a", { text: title, href: "#", cls: "ffc-notice-link" });
@@ -3296,7 +3678,7 @@ var FilteredFileCommandsPlugin = class extends import_obsidian20.Plugin {
         notice.hide();
       });
     } catch (err) {
-      new import_obsidian20.Notice(`Failed to create file: ${err.message}`);
+      new import_obsidian22.Notice(`Failed to create file: ${err.message}`);
     }
   }
   injectFieldsIntoContent(content, noteType, fieldValues) {
@@ -3420,6 +3802,8 @@ ${content}`;
     }
     delete raw.objectTypes;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+    if (this.settings.relationTypes === DEFAULT_SETTINGS.relationTypes)
+      this.settings.relationTypes = [];
     if (!this.settings.noteTypes)
       this.settings.noteTypes = [];
     if (this.settings.templatesFolder === void 0)
@@ -3493,6 +3877,8 @@ ${content}`;
         needsSave = true;
       }
     }
+    if (ensureRelationTypes(this.settings))
+      needsSave = true;
     if (needsSave)
       await this.saveSettings();
   }
