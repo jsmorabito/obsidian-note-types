@@ -8,7 +8,7 @@ import { FilteredCommandSettingsModal } from './ui/filtered-command-settings-mod
 import { FilteredCommandDeleteModal } from './ui/filtered-command-delete-modal.ts';
 import { RelationTypeModal } from './ui/relation-type-modal.ts';
 import { defaultRelationType, resolvedRelation } from './relations.ts';
-import { nameToCommandSlug } from './utils/helpers.ts';
+import { uniqueCommandSlug } from './utils/helpers.ts';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   commands: [],
@@ -121,12 +121,9 @@ export class MyPluginSettingTab extends PluginSettingTab {
         // skips the delete/reorder affordances on page rows, so navigation to the
         // sub-page is done by hand in `openNoteTypePage`.
         items: s.noteTypes.map((obj) => {
-          const slugMismatch = obj.commandSlug !== nameToCommandSlug(obj.name);
-          const desc = [obj.description, slugMismatch ? '⚠ command ID no longer matches the name' : '']
-            .filter(Boolean).join(' · ');
           return {
             name: obj.name || 'Untitled note type',
-            desc: desc || undefined,
+            desc: obj.description || undefined,
             searchable: false,
             action: (_el: HTMLElement, index: number) => this.openNoteTypePage(index),
           };
@@ -285,9 +282,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
     const s = this.plugin.settings;
     const id         = `ffc-notetype-${Date.now()}`;
     const takenSlugs = new Set(s.noteTypes.map((o) => o.commandSlug).filter(Boolean));
-    const baseSlug   = nameToCommandSlug('New Note');
-    let newSlug = baseSlug; let slugN = 2;
-    while (takenSlugs.has(newSlug)) newSlug = `${baseSlug}-${slugN++}`;
+    const newSlug    = uniqueCommandSlug('New Note', takenSlugs);
     s.noteTypes.push({
       id, commandSlug: newSlug, name: 'New Note', templatePath: '', saveFolder: '',
       fields: [], matchFilters: [], matchMode: 'all', enableFindCommand: false,

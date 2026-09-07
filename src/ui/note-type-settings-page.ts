@@ -1,7 +1,6 @@
 import { Setting, SettingPage } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import type { CanvasField, FilterSpec, NoteField, PreviewField } from '../types.ts';
-import { nameToCommandSlug } from '../utils/helpers.ts';
 import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
@@ -77,13 +76,6 @@ export class NoteTypeSettingsPage extends SettingPage {
           this.onDataChange?.();
         })
       );
-
-    if (obj.commandSlug !== nameToCommandSlug(obj.name)) {
-      contentEl.createEl('p', {
-        text: `⚠ Command ID ("${obj.commandSlug}") was set when this type was first created and no longer matches the current name. Renaming only updates the display — to fix it, change "commandSlug" in data.json to "${nameToCommandSlug(obj.name)}" and rebind any shortcuts.`,
-        cls: 'ffc-hint ffc-slug-warning',
-      });
-    }
 
     // ── Note detection ───────────────────────────────────────────────────────
     new Setting(contentEl).setName('Note detection').setHeading();
