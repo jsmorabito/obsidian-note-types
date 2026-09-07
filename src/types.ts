@@ -49,6 +49,27 @@ export interface NoteType {
   showImageInCanvas?: boolean;
 }
 
+export interface RelationType {
+  /** Stable id. The built-in generic relation is always `'related-to'`. */
+  id: string;
+  /** Forward label, e.g. "Related to", "Blocks". */
+  name: string;
+  /** Frontmatter key written on the note you mark (the source), e.g. "related_to". */
+  frontmatterKey: string;
+  /**
+   * Reverse label shown from the target's side, e.g. "Blocked by". Blank means
+   * the relation reads the same both ways (falls back to `name` at use time).
+   */
+  reverseName: string;
+  /**
+   * Frontmatter key written on the target note. Blank means reuse
+   * `frontmatterKey` (symmetric relation).
+   */
+  reverseKey: string;
+  /** True only for the built-in "Related to" relation; blocks deletion. */
+  builtin?: boolean;
+}
+
 export interface CommandSpec {
   id: string;
   name: string;
@@ -110,6 +131,7 @@ export interface PluginSettings {
   filteredWidgetEnabled: boolean;
   filteredWidgetRibbon: boolean;
   noteTypes: NoteType[];
+  relationTypes: RelationType[];
   templatesFolder: string;
   triggerKey: string;
   fetchUrlTitles: boolean;

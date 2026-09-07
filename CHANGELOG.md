@@ -5,6 +5,24 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0]
+
+### Added
+
+- **Relations.** Right-click a note that belongs to a note type and choose
+  **Mark as… → `<relation>` → `<note type>`** (or **Any note…**) to pick another
+  note and link the two. The link is written into both notes' frontmatter — under
+  the relation's key on the note you marked and under its reverse key on the
+  target — so the relation is visible from either side.
+- A built-in generic **Related to** relation (symmetric, frontmatter key
+  `related_to`) that every note type can use. Its key and labels can be changed
+  but it cannot be deleted.
+- **Settings → Note Types → Relations** — add, edit, reorder, and delete custom
+  relation types. Each has a name, a frontmatter key, and an optional reverse
+  label and reverse key for asymmetric relations (e.g. *Blocks* / *Blocked by*).
+- **Unmark…** on the same file menu lists a note's existing relations and removes
+  the chosen one from both notes' frontmatter.
+
 ## [1.7.0]
 
 ### Changed
