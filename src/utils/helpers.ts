@@ -50,6 +50,17 @@ export function nameToCommandSlug(name: string): string {
 }
 
 /**
+ * Command slug for `name` that isn't already in `taken`, appending `-2`, `-3`, …
+ * on collision. Pure — does not mutate `taken`.
+ */
+export function uniqueCommandSlug(name: string, taken: Set<string>): string {
+  const base = nameToCommandSlug(name);
+  let slug = base;
+  for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+  return slug;
+}
+
+/**
  * Collect every distinct frontmatter value used for `key` across the vault,
  * sorted case-insensitively. For tag/tags keys the tag cache is also consulted.
  */

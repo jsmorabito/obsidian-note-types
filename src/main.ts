@@ -6,7 +6,7 @@ import {
   relationLinkText, stripLinktext, toEntryArray, collapseEntries,
 } from './relations.ts';
 import { RelationTargetModal } from './ui/relation-target-modal.ts';
-import { isUrl, nameToCommandSlug, stringifyFrontmatterValue } from './utils/helpers.ts';
+import { isUrl, nameToCommandSlug, uniqueCommandSlug, stringifyFrontmatterValue } from './utils/helpers.ts';
 import { fetchPageTitle } from './utils/fetch-title.ts';
 import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
@@ -605,6 +605,37 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.registeredCommandIds.add(cmdId);
   }
 
+  /**
+   * Carry a note type's user-bound hotkeys over to its new command IDs when its
+   * slug is healed on load. Obsidian keys custom hotkeys by command ID, which is
+   * fixed once a command is registered, so without this the bindings would point
+   * at an ID that no longer exists. Called before the commands are registered, so
+   * there is nothing to unregister — only the stored hotkey map to update.
+   */
+  private migrateCommandHotkeys(oldSlug: string, newSlug: string): void {
+    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+       hotkeyManager and its customKeys map aren't part of the public Obsidian API. */
+    try {
+      const hkm    = (this.app as any).hotkeyManager;
+      const custom = hkm?.customKeys;
+      if (!custom) return;
+      let changed = false;
+      for (const suffix of ['', '-find']) {
+        const oldId = `ffc-notetype-${oldSlug}${suffix}`;
+        const newId = `ffc-notetype-${newSlug}${suffix}`;
+        const keys  = custom[oldId];
+        if (keys && keys.length && !custom[newId]) {
+          custom[newId] = keys;
+          delete custom[oldId];
+          changed = true;
+        }
+      }
+      if (changed) hkm.save();
+    } catch { /* a private-API shape change here must not break loading */ }
+    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
+       End of hotkeyManager reflection block. */
+  }
+
   private registerNewNoteCommand(): void {
     this.addCommand({
       id: 'ffc-new-note',
@@ -889,12 +920,26 @@ export class FilteredFileCommandsPlugin extends Plugin {
       if (obj.showImageInCanvas  === undefined)  { obj.showImageInCanvas  = false; needsSave = true; }
 
       if (!obj.commandSlug) {
-        const base = nameToCommandSlug(obj.name);
-        let slug = base; let n = 2;
-        while (takenSlugs.has(slug)) slug = `${base}-${n++}`;
-        obj.commandSlug = slug;
-        takenSlugs.add(slug);
+        obj.commandSlug = uniqueCommandSlug(obj.name, takenSlugs);
+        takenSlugs.add(obj.commandSlug);
         needsSave = true;
+      } else if (obj.commandSlug !== nameToCommandSlug(obj.name)) {
+        // Keep the command slug in step with the current name. Obsidian command
+        // IDs are immutable once registered and hotkeys are keyed by that ID, so
+        // a rename would otherwise strand the slug (and the old warning about it).
+        // This runs before onload() registers the commands, so healing here just
+        // means moving any bound hotkeys across to the fresh ID. Free the current
+        // slug before searching so a name whose base is taken by a *different*
+        // type keeps its existing `-N` suffix instead of being rewritten (and
+        // re-saved) on every load.
+        takenSlugs.delete(obj.commandSlug);
+        const slug = uniqueCommandSlug(obj.name, takenSlugs);
+        if (slug !== obj.commandSlug) {
+          this.migrateCommandHotkeys(obj.commandSlug, slug);
+          obj.commandSlug = slug;
+          needsSave = true;
+        }
+        takenSlugs.add(obj.commandSlug);
       }
     }
 
