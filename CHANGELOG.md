@@ -5,6 +5,16 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0]
+
+### Added
+
+- **Link color for styled note links.** Each note type with *Style note links*
+  enabled now has a **Link color** setting. When set, inline `[[wikilinks]]` to
+  files of that type render in the chosen color with a translucent tint of it as
+  the pill background — in the editor and reading view. Leave it unset (or use
+  the reset button) to keep the theme's default tag colors.
+
 ## [1.8.0]
 
 ### Added
