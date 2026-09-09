@@ -173,6 +173,17 @@ var KeyLabelFieldModal = class extends import_obsidian3.Modal {
 };
 
 // src/ui/note-type-settings-page.ts
+function hslToHex(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = (n) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const c = l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return Math.round(255 * c).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
 var OP_LABELS = {
   equals: "equals",
   not_equals: "does not equal",
@@ -191,7 +202,7 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
     this.title = ((_a = plugin.settings.noteTypes[index]) == null ? void 0 : _a.name) || "Note type";
   }
   display() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
     const contentEl = this.containerEl;
     const scroller = this._scrollParent(contentEl);
     const prevScroll = (_a = scroller == null ? void 0 : scroller.scrollTop) != null ? _a : 0;
@@ -291,9 +302,36 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
           await this.plugin.saveSettings();
           this.plugin.buildStyledNoteSet();
           this.plugin.refreshNoteLinkStyles();
+          this.display();
         });
       }
     );
+    if (obj.styledLinks) {
+      const isDefault = !((_c = obj.linkColor) == null ? void 0 : _c.trim());
+      const colorSetting = new import_obsidian4.Setting(contentEl).setName("Link color").setDesc("Color for styled links of this type: the text uses this color and the pill background is a translucent tint of it. Unset means the theme default.");
+      colorSetting.addExtraButton(
+        (btn) => btn.setIcon("rotate-ccw").setTooltip("Restore default").setDisabled(isDefault).onClick(async () => {
+          if (isDefault)
+            return;
+          obj.linkColor = void 0;
+          await this.plugin.saveSettings();
+          this.plugin.buildStyledNoteSet();
+          this.plugin.refreshNoteLinkStyles();
+          this.display();
+        })
+      );
+      colorSetting.addColorPicker(
+        (picker) => {
+          var _a2;
+          return picker.setValue(((_a2 = obj.linkColor) == null ? void 0 : _a2.trim()) || this._accentColorHex()).onChange(async (value) => {
+            obj.linkColor = value;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+          });
+        }
+      );
+    }
     new import_obsidian4.Setting(contentEl).setName("Show status in links").setDesc('When enabled, a status icon is shown on inline links to files of this type that have a "status" frontmatter field.').addToggle(
       (toggle) => {
         var _a2;
@@ -336,9 +374,9 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
       text: "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
       cls: "ffc-hint"
     });
-    for (let fi = 0; fi < ((_c = obj.fields) != null ? _c : []).length; fi++) {
+    for (let fi = 0; fi < ((_d = obj.fields) != null ? _d : []).length; fi++) {
       const field = obj.fields[fi];
-      new import_obsidian4.Setting(contentEl).setName(((_d = field.label) == null ? void 0 : _d.trim()) || ((_e = field.key) == null ? void 0 : _e.trim()) || "Unnamed field").setDesc(this._fieldDesc(field)).addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit field").onClick(() => new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove field").onClick(async () => {
+      new import_obsidian4.Setting(contentEl).setName(((_e = field.label) == null ? void 0 : _e.trim()) || ((_f = field.key) == null ? void 0 : _f.trim()) || "Unnamed field").setDesc(this._fieldDesc(field)).addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit field").onClick(() => new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove field").onClick(async () => {
         obj.fields.splice(fi, 1);
         await this.plugin.saveSettings();
         this.display();
@@ -355,7 +393,7 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
         new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open();
       })
     );
-    const urlFieldOptions = ((_f = obj.fields) != null ? _f : []).filter((f) => {
+    const urlFieldOptions = ((_g = obj.fields) != null ? _g : []).filter((f) => {
       var _a2;
       return (_a2 = f.key) == null ? void 0 : _a2.trim();
     });
@@ -379,9 +417,9 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
       text: "Frontmatter keys shown when hovering over a link to a note of this type.",
       cls: "ffc-hint"
     });
-    for (let fi = 0; fi < ((_g = obj.previewFields) != null ? _g : []).length; fi++) {
+    for (let fi = 0; fi < ((_h = obj.previewFields) != null ? _h : []).length; fi++) {
       const field = obj.previewFields[fi];
-      new import_obsidian4.Setting(contentEl).setName(((_h = field.label) == null ? void 0 : _h.trim()) || ((_i = field.key) == null ? void 0 : _i.trim()) || "Unnamed key").setDesc(((_j = field.key) == null ? void 0 : _j.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
+      new import_obsidian4.Setting(contentEl).setName(((_i = field.label) == null ? void 0 : _i.trim()) || ((_j = field.key) == null ? void 0 : _j.trim()) || "Unnamed key").setDesc(((_k = field.key) == null ? void 0 : _k.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
         heading: "Preview field",
         afterChange: () => {
           this.plugin.buildStyledNoteSet();
@@ -428,9 +466,9 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
       text: "Frontmatter keys shown on canvas cards for notes of this type.",
       cls: "ffc-hint"
     });
-    for (let fi = 0; fi < ((_k = obj.canvasFields) != null ? _k : []).length; fi++) {
+    for (let fi = 0; fi < ((_l = obj.canvasFields) != null ? _l : []).length; fi++) {
       const field = obj.canvasFields[fi];
-      new import_obsidian4.Setting(contentEl).setName(((_l = field.label) == null ? void 0 : _l.trim()) || ((_m = field.key) == null ? void 0 : _m.trim()) || "Unnamed key").setDesc(((_n = field.key) == null ? void 0 : _n.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
+      new import_obsidian4.Setting(contentEl).setName(((_m = field.label) == null ? void 0 : _m.trim()) || ((_n = field.key) == null ? void 0 : _n.trim()) || "Unnamed key").setDesc(((_o = field.key) == null ? void 0 : _o.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
         heading: "Canvas card field",
         onDismiss: () => this.display()
       }).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove key").onClick(async () => {
@@ -497,6 +535,21 @@ var NoteTypeSettingsPage = class extends import_obsidian4.SettingPage {
       parts.push(`key: ${f.key}`);
     parts.push(f.type === "list" ? "list" : "text");
     return parts.join(" \xB7 ");
+  }
+  /**
+   * The current theme's accent colour as `#rrggbb`, for use as the colour
+   * picker's swatch while `linkColor` is unset (mirrors Obsidian's own
+   * "Accent color" setting). Reads the `--accent-h/s/l` custom properties the
+   * app sets on `<body>`; falls back to black if they can't be resolved.
+   */
+  _accentColorHex() {
+    const s = getComputedStyle(document.body);
+    const h = parseFloat(s.getPropertyValue("--accent-h"));
+    const sat = parseFloat(s.getPropertyValue("--accent-s"));
+    const lig = parseFloat(s.getPropertyValue("--accent-l"));
+    if (![h, sat, lig].every(Number.isFinite))
+      return "#000000";
+    return hslToHex(h, sat, lig);
   }
   /** Nearest vertically-scrollable ancestor of `el`, or null. */
   _scrollParent(el) {
@@ -2932,6 +2985,7 @@ var FilteredFilesWidgetView = class extends import_obsidian21.ItemView {
 // src/views/note-link-view-plugin.ts
 var import_view = require("@codemirror/view");
 var import_state = require("@codemirror/state");
+var refreshNoteLinkStylesEffect = import_state.StateEffect.define();
 var StatusIconWidget = class extends import_view.WidgetType {
   constructor(cls, svg) {
     super();
@@ -2959,7 +3013,8 @@ function buildNoteLinkViewPlugin(ffcPlugin) {
         this.applyFoldedLinkClasses(view);
       }
       update(update) {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        const forced = update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshNoteLinkStylesEffect)));
+        if (forced || update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.build(update.view);
           this.applyFoldedLinkClasses(update.view);
         }
@@ -2978,14 +3033,17 @@ function buildNoteLinkViewPlugin(ffcPlugin) {
           var _a, _b;
           const href = ((_a = el.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
           const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
-          el.classList.toggle(
-            "ffc-note-link",
-            hasStyled && (basenames.has(href) || basenames.has(basename))
-          );
+          const isStyled = hasStyled && (basenames.has(href) || basenames.has(basename));
+          el.classList.toggle("ffc-note-link", isStyled);
           el.classList.toggle(
             "ffc-note-preview-link",
             hasPreview && (previewBasenames.has(href) || previewBasenames.has(basename))
           );
+          const color = isStyled ? ffcPlugin.noteLinkColor(href) : void 0;
+          if (color)
+            el.style.setProperty("--ffc-note-link-color", color);
+          else
+            el.style.removeProperty("--ffc-note-link-color");
         });
       }
       build(view) {
@@ -3013,7 +3071,9 @@ function buildNoteLinkViewPlugin(ffcPlugin) {
           const cursorOnLink = selection.ranges.some((r) => r.from <= linkTo && r.to >= linkFrom);
           if (isStyled || isPreview) {
             const cls = [isStyled ? "ffc-note-link" : "", isPreview ? "ffc-note-preview-link" : ""].filter(Boolean).join(" ");
-            builder.add(linkFrom, linkTo, import_view.Decoration.mark({ class: cls }));
+            const color = isStyled ? ffcPlugin.noteLinkColor(target) : void 0;
+            const spec = color ? { class: cls, attributes: { style: `--ffc-note-link-color: ${color}` } } : { class: cls };
+            builder.add(linkFrom, linkTo, import_view.Decoration.mark(spec));
           }
           if (hasStatus && !cursorOnLink) {
             const rawStatus = (_b = statusMap.get(targetBasename)) != null ? _b : statusMap.get(target);
@@ -3044,6 +3104,8 @@ var FilteredFileCommandsPlugin = class extends import_obsidian22.Plugin {
     this.registeredCommandIds = /* @__PURE__ */ new Set();
     this.styledNoteBasenames = /* @__PURE__ */ new Set();
     this.styledNotePaths = /* @__PURE__ */ new Set();
+    /** file path → link colour, for styled types that set `linkColor`. */
+    this.styledNoteColors = /* @__PURE__ */ new Map();
     this.previewNoteBasenames = /* @__PURE__ */ new Set();
     this.previewNotePaths = /* @__PURE__ */ new Set();
     this.statusNoteMap = /* @__PURE__ */ new Map();
@@ -3090,13 +3152,18 @@ var FilteredFileCommandsPlugin = class extends import_obsidian22.Plugin {
     this.buildStyledNoteSet();
     this.previewPopup = new NotePreviewPopup(this);
     this.register(() => this.previewPopup.destroy());
-    this.registerMarkdownPostProcessor((el) => {
+    this.registerMarkdownPostProcessor((el, ctx) => {
       el.querySelectorAll("a.internal-link[data-href]").forEach((link) => {
         var _a, _b, _c;
         const href = ((_a = link.getAttribute("data-href")) != null ? _a : "").split("#")[0].trim();
         const basename = href.includes("/") ? (_b = href.split("/").pop()) != null ? _b : href : href;
         if (this.styledNoteBasenames.has(href) || this.styledNoteBasenames.has(basename)) {
           link.classList.add("ffc-note-link");
+          const color = this.noteLinkColor(href, ctx.sourcePath);
+          if (color)
+            link.style.setProperty("--ffc-note-link-color", color);
+          else
+            link.style.removeProperty("--ffc-note-link-color");
         }
         if (this.previewNoteBasenames.has(href) || this.previewNoteBasenames.has(basename)) {
           link.classList.add("ffc-note-preview-link");
@@ -3915,9 +3982,10 @@ ${content}`;
   }
   // ── Note link styling ─────────────────────────────────────────────────────────
   buildStyledNoteSet() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     this.styledNoteBasenames = /* @__PURE__ */ new Set();
     this.styledNotePaths = /* @__PURE__ */ new Set();
+    this.styledNoteColors = /* @__PURE__ */ new Map();
     this.previewNoteBasenames = /* @__PURE__ */ new Set();
     this.previewNotePaths = /* @__PURE__ */ new Set();
     this.statusNoteMap = /* @__PURE__ */ new Map();
@@ -3929,19 +3997,33 @@ ${content}`;
         if (noteType.styledLinks) {
           this.styledNoteBasenames.add(file.basename);
           this.styledNotePaths.add(file.path);
+          const color = (_b = noteType.linkColor) == null ? void 0 : _b.trim();
+          if (color)
+            this.styledNoteColors.set(file.path, color);
         }
         if (hasPreview) {
           this.previewNoteBasenames.add(file.basename);
           this.previewNotePaths.add(file.path);
         }
         if (noteType.showStatusInLinks) {
-          const raw = (_c = (_b = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _b.frontmatter) == null ? void 0 : _c["status"];
+          const raw = (_d = (_c = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _c.frontmatter) == null ? void 0 : _d["status"];
           if (typeof raw === "string" && VALID_STATUSES.has(raw)) {
             this.statusNoteMap.set(file.basename, raw);
           }
         }
       }
     }
+  }
+  /**
+   * Link colour for a wikilink, resolved against its *actual* target file so a
+   * basename shared with another note can't borrow this type's colour. Returns
+   * undefined when the target isn't a styled note or has no colour set.
+   */
+  noteLinkColor(linkpath, sourcePath = "") {
+    if (this.styledNoteColors.size === 0 || !linkpath)
+      return void 0;
+    const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+    return dest ? this.styledNoteColors.get(dest.path) : void 0;
   }
   refreshNoteLinkStyles() {
     document.querySelectorAll("a.internal-link[data-href]").forEach((link) => {
@@ -3952,6 +4034,16 @@ ${content}`;
       const isPreview = this.previewNoteBasenames.has(href) || this.previewNoteBasenames.has(basename);
       link.classList.toggle("ffc-note-link", isStyled);
       link.classList.toggle("ffc-note-preview-link", isPreview);
+      const color = isStyled ? this.noteLinkColor(href) : void 0;
+      if (color)
+        link.style.setProperty("--ffc-note-link-color", color);
+      else
+        link.style.removeProperty("--ffc-note-link-color");
+    });
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      var _a;
+      const cm = (_a = leaf.view.editor) == null ? void 0 : _a.cm;
+      cm == null ? void 0 : cm.dispatch({ effects: refreshNoteLinkStylesEffect.of(null) });
     });
   }
 };

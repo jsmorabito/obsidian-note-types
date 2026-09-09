@@ -21,7 +21,7 @@ If the selection is a bare URL and the note type has a **Field for highlighted U
 Set a single trigger character (e.g. `@`) in settings. Typing it in the editor opens a quick picker for any note type that has *Show in trigger menu* enabled.
 
 **Styled wikilinks**  
-Enable *Styled links* on a note type to apply a CSS class (`ffc-note-link`) to every `[[wikilink]]` pointing at a file of that type — in both the editor and reading view. Pairs well with a CSS snippet.
+Enable *Style note links* on a note type to apply a CSS class (`ffc-note-link`) to every `[[wikilink]]` pointing at a file of that type — in both the editor and reading view. The underline is dropped and a pill background is applied. Set an optional **Link color** to tint those links: the text takes the color and the pill background becomes a translucent wash of it. Leave the color unset to follow the theme's tag colors, or pair with a CSS snippet for finer control.
 
 **Hover preview card**  
 Enable *Preview fields* on a type and hovering a styled wikilink shows a popup card with those frontmatter values (and an optional image).

@@ -169,6 +169,22 @@
   border-color: var(--tag-border-color-hover, var(--tag-border-color, transparent));
 }
 
+/* Per-note-type link colour: set inline as --ffc-note-link-color on the link.
+   The text takes the colour; the pill is a translucent tint of the same hue. */
+.markdown-rendered a.internal-link.ffc-note-link[style*="--ffc-note-link-color"],
+.markdown-preview-view a.internal-link.ffc-note-link[style*="--ffc-note-link-color"],
+.markdown-reading-view a.internal-link.ffc-note-link[style*="--ffc-note-link-color"] {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
+  color: var(--ffc-note-link-color) !important;
+}
+
+.markdown-rendered a.internal-link.ffc-note-link[style*="--ffc-note-link-color"]:hover,
+.markdown-preview-view a.internal-link.ffc-note-link[style*="--ffc-note-link-color"]:hover,
+.markdown-reading-view a.internal-link.ffc-note-link[style*="--ffc-note-link-color"]:hover {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 28%, transparent);
+  color: var(--ffc-note-link-color) !important;
+}
+
 
 /* ── Note preview popup ─────────────────────────────────────────────────── */
 
@@ -274,6 +290,16 @@
   border-color: var(--tag-border-color-hover, var(--tag-border-color, transparent));
 }
 
+.cm-editor a.internal-link.ffc-note-link[style*="--ffc-note-link-color"] {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
+  color: var(--ffc-note-link-color) !important;
+}
+
+.cm-editor a.internal-link.ffc-note-link[style*="--ffc-note-link-color"]:hover {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 28%, transparent);
+  color: var(--ffc-note-link-color) !important;
+}
+
 /* Expanded wikilinks (cursor is inside [[...]]): CM6 splits the link across
    multiple adjacent <span> elements (brackets + text). Each span gets the class
    via Decoration.mark(). border-radius and box-shadow on individual spans cause
@@ -282,6 +308,10 @@
 .cm-editor .ffc-note-link {
   background: var(--tag-background);
   padding: 2px 0;
+}
+
+.cm-editor .ffc-note-link[style*="--ffc-note-link-color"] {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
 }
 
 /* Target the inner CM6 link spans directly — you can't cancel a child's
@@ -293,6 +323,13 @@
   text-decoration: none !important;
   text-decoration-line: none !important;
   color: var(--tag-color) !important;
+}
+
+.cm-editor .ffc-note-link[style*="--ffc-note-link-color"],
+.cm-editor .ffc-note-link[style*="--ffc-note-link-color"] .cm-hmd-internal-link,
+.cm-editor .ffc-note-link[style*="--ffc-note-link-color"] .cm-link,
+.cm-editor .ffc-note-link[style*="--ffc-note-link-color"] .cm-underline {
+  color: var(--ffc-note-link-color) !important;
 }
 
 

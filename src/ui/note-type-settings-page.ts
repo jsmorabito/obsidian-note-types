@@ -5,6 +5,19 @@ import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
 
+/** HSL (h in degrees, s and l in percent) → `#rrggbb`. */
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const k = (n: number): number => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number): string => {
+    const c = l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return Math.round(255 * c).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 const OP_LABELS: Record<FilterSpec['operator'], string> = {
   equals: 'equals',
   not_equals: 'does not equal',
@@ -150,8 +163,39 @@ export class NoteTypeSettingsPage extends SettingPage {
             await this.plugin.saveSettings();
             this.plugin.buildStyledNoteSet();
             this.plugin.refreshNoteLinkStyles();
+            this.display();
           })
       );
+
+    if (obj.styledLinks) {
+      const isDefault = !obj.linkColor?.trim();
+      const colorSetting = new Setting(contentEl)
+        .setName('Link color')
+        .setDesc('Color for styled links of this type: the text uses this color and the pill background is a translucent tint of it. Unset means the theme default.');
+      // Matches Obsidian's own "Accent color" setting: a restore button next to a
+      // swatch that shows the accent color while the value is unset.
+      colorSetting.addExtraButton((btn) =>
+        btn.setIcon('rotate-ccw').setTooltip('Restore default')
+          .setDisabled(isDefault)
+          .onClick(async () => {
+            if (isDefault) return;
+            obj.linkColor = undefined;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+            this.display();
+          })
+      );
+      colorSetting.addColorPicker((picker) =>
+        picker.setValue(obj.linkColor?.trim() || this._accentColorHex())
+          .onChange(async (value) => {
+            obj.linkColor = value;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+          })
+      );
+    }
 
     new Setting(contentEl)
       .setName('Show status in links')
@@ -371,6 +415,21 @@ export class NoteTypeSettingsPage extends SettingPage {
     if (f.key?.trim()) parts.push(`key: ${f.key}`);
     parts.push(f.type === 'list' ? 'list' : 'text');
     return parts.join(' · ');
+  }
+
+  /**
+   * The current theme's accent colour as `#rrggbb`, for use as the colour
+   * picker's swatch while `linkColor` is unset (mirrors Obsidian's own
+   * "Accent color" setting). Reads the `--accent-h/s/l` custom properties the
+   * app sets on `<body>`; falls back to black if they can't be resolved.
+   */
+  private _accentColorHex(): string {
+    const s = getComputedStyle(document.body);
+    const h = parseFloat(s.getPropertyValue('--accent-h'));
+    const sat = parseFloat(s.getPropertyValue('--accent-s'));
+    const lig = parseFloat(s.getPropertyValue('--accent-l'));
+    if (![h, sat, lig].every(Number.isFinite)) return '#000000';
+    return hslToHex(h, sat, lig);
   }
 
   /** Nearest vertically-scrollable ancestor of `el`, or null. */

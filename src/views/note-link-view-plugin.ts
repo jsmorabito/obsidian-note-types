@@ -1,7 +1,15 @@
 import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate, WidgetType } from '@codemirror/view';
-import { RangeSetBuilder } from '@codemirror/state';
+import { RangeSetBuilder, StateEffect } from '@codemirror/state';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { statusToClass, statusSvg } from '../utils/status-svg.ts';
+
+/**
+ * Dispatched to every editor by `refreshNoteLinkStyles()` after the styled-note
+ * set is rebuilt (e.g. a settings change). CM6 only calls `update()` when a
+ * transaction touches the doc/viewport/selection, so without this a link the
+ * caret is currently inside keeps its stale decoration until the next edit.
+ */
+export const refreshNoteLinkStylesEffect = StateEffect.define<null>();
 
 class StatusIconWidget extends WidgetType {
   constructor(private readonly cls: string, private readonly svg: SVGElement) { super(); }
@@ -36,7 +44,9 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
       }
 
       update(update: ViewUpdate): void {
-        if (update.docChanged || update.viewportChanged || update.selectionSet) {
+        const forced = update.transactions.some((tr) =>
+          tr.effects.some((e) => e.is(refreshNoteLinkStylesEffect)));
+        if (forced || update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.build(update.view);
           this.applyFoldedLinkClasses(update.view);
         }
@@ -56,10 +66,13 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
         view.dom.querySelectorAll('a.internal-link[data-href]').forEach((el) => {
           const href     = (el.getAttribute('data-href') ?? '').split('#')[0].trim();
           const basename = href.includes('/') ? href.split('/').pop() ?? href : href;
-          (el as HTMLElement).classList.toggle('ffc-note-link',
-            hasStyled  && (basenames.has(href) || basenames.has(basename)));
+          const isStyled = hasStyled && (basenames.has(href) || basenames.has(basename));
+          (el as HTMLElement).classList.toggle('ffc-note-link', isStyled);
           (el as HTMLElement).classList.toggle('ffc-note-preview-link',
             hasPreview && (previewBasenames.has(href) || previewBasenames.has(basename)));
+          const color = isStyled ? ffcPlugin.noteLinkColor(href) : undefined;
+          if (color) (el as HTMLElement).style.setProperty('--ffc-note-link-color', color);
+          else       (el as HTMLElement).style.removeProperty('--ffc-note-link-color');
         });
       }
 
@@ -90,7 +103,11 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
 
           if (isStyled || isPreview) {
             const cls = [isStyled ? 'ffc-note-link' : '', isPreview ? 'ffc-note-preview-link' : ''].filter(Boolean).join(' ');
-            builder.add(linkFrom, linkTo, Decoration.mark({ class: cls }));
+            const color = isStyled ? ffcPlugin.noteLinkColor(target) : undefined;
+            const spec: Parameters<typeof Decoration.mark>[0] = color
+              ? { class: cls, attributes: { style: `--ffc-note-link-color: ${color}` } }
+              : { class: cls };
+            builder.add(linkFrom, linkTo, Decoration.mark(spec));
           }
 
           if (hasStatus && !cursorOnLink) {

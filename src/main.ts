@@ -17,7 +17,7 @@ import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
 import { CanvasNoteSwitcher, ObsidianCanvas } from './ui/canvas-note-switcher.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
-import { buildNoteLinkViewPlugin } from './views/note-link-view-plugin.ts';
+import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
 import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
@@ -45,6 +45,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
   styledNoteBasenames:  Set<string> = new Set();
   styledNotePaths:      Set<string> = new Set();
+  /** file path → link colour, for styled types that set `linkColor`. */
+  styledNoteColors:     Map<string, string> = new Map();
   previewNoteBasenames: Set<string> = new Set();
   previewNotePaths:     Set<string> = new Set();
   statusNoteMap:        Map<string, string> = new Map();
@@ -103,12 +105,15 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.previewPopup = new NotePreviewPopup(this);
     this.register(() => this.previewPopup.destroy());
 
-    this.registerMarkdownPostProcessor((el) => {
+    this.registerMarkdownPostProcessor((el, ctx) => {
       el.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
         const href     = (link.getAttribute('data-href') ?? '').split('#')[0].trim();
         const basename = href.includes('/') ? href.split('/').pop() ?? href : href;
         if (this.styledNoteBasenames.has(href) || this.styledNoteBasenames.has(basename)) {
           link.classList.add('ffc-note-link');
+          const color = this.noteLinkColor(href, ctx.sourcePath);
+          if (color) (link as HTMLElement).style.setProperty('--ffc-note-link-color', color);
+          else       (link as HTMLElement).style.removeProperty('--ffc-note-link-color');
         }
         if (this.previewNoteBasenames.has(href) || this.previewNoteBasenames.has(basename)) {
           link.classList.add('ffc-note-preview-link');
@@ -955,6 +960,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
   buildStyledNoteSet(): void {
     this.styledNoteBasenames  = new Set();
     this.styledNotePaths      = new Set();
+    this.styledNoteColors     = new Map();
     this.previewNoteBasenames = new Set();
     this.previewNotePaths     = new Set();
     this.statusNoteMap        = new Map();
@@ -965,6 +971,11 @@ export class FilteredFileCommandsPlugin extends Plugin {
         if (noteType.styledLinks) {
           this.styledNoteBasenames.add(file.basename);
           this.styledNotePaths.add(file.path);
+          const color = noteType.linkColor?.trim();
+          // Keyed by path only: the colour is resolved against the link's actual
+          // target (see noteLinkColor), so a basename shared by another note
+          // doesn't borrow this type's colour.
+          if (color) this.styledNoteColors.set(file.path, color);
         }
         if (hasPreview) {
           this.previewNoteBasenames.add(file.basename);
@@ -980,6 +991,17 @@ export class FilteredFileCommandsPlugin extends Plugin {
     }
   }
 
+  /**
+   * Link colour for a wikilink, resolved against its *actual* target file so a
+   * basename shared with another note can't borrow this type's colour. Returns
+   * undefined when the target isn't a styled note or has no colour set.
+   */
+  noteLinkColor(linkpath: string, sourcePath = ''): string | undefined {
+    if (this.styledNoteColors.size === 0 || !linkpath) return undefined;
+    const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
+    return dest ? this.styledNoteColors.get(dest.path) : undefined;
+  }
+
   refreshNoteLinkStyles(): void {
     document.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
       const href      = (link.getAttribute('data-href') ?? '').split('#')[0].trim();
@@ -988,6 +1010,16 @@ export class FilteredFileCommandsPlugin extends Plugin {
       const isPreview = this.previewNoteBasenames.has(href)  || this.previewNoteBasenames.has(basename);
       (link as HTMLElement).classList.toggle('ffc-note-link',         isStyled);
       (link as HTMLElement).classList.toggle('ffc-note-preview-link', isPreview);
+      const color = isStyled ? this.noteLinkColor(href) : undefined;
+      if (color) (link as HTMLElement).style.setProperty('--ffc-note-link-color', color);
+      else       (link as HTMLElement).style.removeProperty('--ffc-note-link-color');
+    });
+
+    // Nudge every open editor so the CM6 view plugin rebuilds decorations for
+    // links the caret is currently inside (it otherwise waits for the next edit).
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      const cm = (leaf.view as { editor?: { cm?: { dispatch: (spec: unknown) => void } } }).editor?.cm;
+      cm?.dispatch({ effects: refreshNoteLinkStylesEffect.of(null) });
     });
   }
 }

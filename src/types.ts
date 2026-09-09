@@ -41,6 +41,13 @@ export interface NoteType {
   enableFindCommand: boolean;
   showInTriggerMenu: boolean;
   styledLinks?: boolean;
+  /**
+   * Optional CSS colour (any valid CSS colour string, typically a hex value)
+   * applied to inline links of this type when `styledLinks` is on. The text
+   * takes this colour and the pill background is a translucent tint of it.
+   * Blank / undefined falls back to the theme's default tag colours.
+   */
+  linkColor?: string;
   showStatusInLinks?: boolean;
   previewFields: PreviewField[];
   canvasFields: CanvasField[];
