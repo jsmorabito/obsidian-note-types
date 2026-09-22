@@ -151,7 +151,7 @@
   text-decoration-line: none !important;
   background: var(--tag-background);
   color: var(--tag-color) !important;
-  border-radius: var(--radius-xs, 2px);
+  border-radius: var(--radius-s, 4px);
   padding: 1px 5px;
   border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
   font-size: var(--tag-size, inherit);
@@ -283,7 +283,7 @@
   text-decoration-line: none !important;
   background: var(--tag-background);
   color: var(--tag-color) !important;
-  border-radius: var(--radius-xs, 2px);
+  border-radius: var(--radius-s, 4px);
   padding: 1px 5px;
   border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
   -webkit-box-decoration-break: clone;
@@ -316,8 +316,8 @@
    to render as one contiguous span) are unaffected. */
 .cm-editor .ffc-note-link {
   background: var(--tag-background);
-  padding: 1px 0;
-  border-radius: var(--radius-xs, 2px);
+  padding: 1px 4px;
+  border-radius: var(--radius-s, 4px);
   /* Plain inline, not inline-flex — see the reading-mode rule above. */
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
@@ -330,6 +330,12 @@
 
 .cm-editor .ffc-note-link[style*="--ffc-note-link-color"] {
   background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
+}
+
+/* While the link is expanded, each fragment would draw its own horizontal
+   padding and open visible gaps between `[[`, the text and `]]`. */
+.cm-editor .ffc-note-link.ffc-note-link-editing {
+  padding: 1px 0;
 }
 
 .cm-editor .ffc-note-link:hover {
@@ -370,11 +376,6 @@
      because a status-only link still gets a mark purely to carry it.
    - Both: a wider box with two mask layers — the type icon on the right, and
      a solid block on the left that lets the status background show through. */
-.cm-editor .ffc-note-link[style*="--ffc-note-link-icon"],
-.cm-editor .ffc-note-link[style*="--ffc-note-link-status-icon"] {
-  padding: 1px 4px;
-}
-
 .cm-editor .ffc-note-link[style*="--ffc-note-link-icon"]::before,
 .cm-editor [style*="--ffc-note-link-status-icon"]::before {
   content: '';

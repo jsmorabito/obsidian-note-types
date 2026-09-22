@@ -184,17 +184,19 @@ export class NoteTypeSettingsPage extends SettingPage {
       );
 
     if (obj.styledLinks) {
-      const isDefault = !obj.linkColor?.trim();
+      // Read live: the picker updates `linkColor` without re-rendering the page.
+      const isDefault = (): boolean => !obj.linkColor?.trim();
       const colorSetting = new Setting(contentEl)
         .setName('Link color')
         .setDesc('Color for styled links of this type: the text uses this color and the pill background is a translucent tint of it. Unset means the theme default.');
       // Matches Obsidian's own "Accent color" setting: a restore button next to a
       // swatch that shows the accent color while the value is unset.
+      let restoreBtn: ExtraButtonComponent | undefined;
       colorSetting.addExtraButton((btn) =>
-        btn.setIcon('rotate-ccw').setTooltip('Restore default')
-          .setDisabled(isDefault)
+        (restoreBtn = btn).setIcon('rotate-ccw').setTooltip('Restore default')
+          .setDisabled(isDefault())
           .onClick(async () => {
-            if (isDefault) return;
+            if (isDefault()) return;
             obj.linkColor = undefined;
             await this.plugin.saveSettings();
             this.plugin.buildStyledNoteSet();
@@ -206,6 +208,7 @@ export class NoteTypeSettingsPage extends SettingPage {
         picker.setValue(obj.linkColor?.trim() || this._accentColorHex())
           .onChange(async (value) => {
             obj.linkColor = value;
+            restoreBtn?.setDisabled(isDefault());
             await this.plugin.saveSettings();
             this.plugin.buildStyledNoteSet();
             this.plugin.refreshNoteLinkStyles();

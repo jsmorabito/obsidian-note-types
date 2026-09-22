@@ -137,6 +137,9 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
               isStyled ? 'ffc-note-link' : '',
               isPreview ? 'ffc-note-preview-link' : '',
               !isStyled && statusUrl ? 'ffc-note-status-host' : '',
+              // Expanded for editing: CM6 splits the mark into fragments, so
+              // the pill's horizontal padding is dropped (see styles.css).
+              isStyled && cursorOnLink ? 'ffc-note-link-editing' : '',
             ];
             const cls = clsParts.filter(Boolean).join(' ');
 
