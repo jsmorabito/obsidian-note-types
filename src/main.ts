@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { getIcon, Notice, Plugin, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
 import { PluginSettings, NoteType, CommandSpec, RelationType } from './types.ts';
 import {
@@ -9,6 +9,7 @@ import { RelationTargetModal } from './ui/relation-target-modal.ts';
 import { isUrl, nameToCommandSlug, uniqueCommandSlug, stringifyFrontmatterValue } from './utils/helpers.ts';
 import { fetchPageTitle } from './utils/fetch-title.ts';
 import { VALID_STATUSES, statusSvg } from './utils/status-svg.ts';
+import { prependIconSpan } from './utils/icon-mask.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
 import { FilteredFileModal } from './ui/filtered-file-modal.ts';
 import { NewNoteModal } from './ui/new-note-modal.ts';
@@ -47,6 +48,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
   styledNotePaths:      Set<string> = new Set();
   /** file path → link colour, for styled types that set `linkColor`. */
   styledNoteColors:     Map<string, string> = new Map();
+  /** file path → link icon id, for styled types with `showLinkIcon` on. */
+  styledNoteIcons:      Map<string, string> = new Map();
   previewNoteBasenames: Set<string> = new Set();
   previewNotePaths:     Set<string> = new Set();
   statusNoteMap:        Map<string, string> = new Map();
@@ -109,24 +112,29 @@ export class FilteredFileCommandsPlugin extends Plugin {
       el.querySelectorAll('a.internal-link[data-href]').forEach((link) => {
         const href     = (link.getAttribute('data-href') ?? '').split('#')[0].trim();
         const basename = href.includes('/') ? href.split('/').pop() ?? href : href;
-        if (this.styledNoteBasenames.has(href) || this.styledNoteBasenames.has(basename)) {
-          link.classList.add('ffc-note-link');
-          const color = this.noteLinkColor(href, ctx.sourcePath);
-          if (color) (link as HTMLElement).style.setProperty('--ffc-note-link-color', color);
-          else       (link as HTMLElement).style.removeProperty('--ffc-note-link-color');
-        }
+        const isStyled = this.styledNoteBasenames.has(href) || this.styledNoteBasenames.has(basename);
+        if (isStyled) link.classList.add('ffc-note-link');
         if (this.previewNoteBasenames.has(href) || this.previewNoteBasenames.has(basename)) {
           link.classList.add('ffc-note-preview-link');
+        }
+
+        const { color, icon } = isStyled ? this.noteLinkStyle(href, ctx.sourcePath) : {};
+        if (color) (link as HTMLElement).style.setProperty('--ffc-note-link-color', color);
+        else       (link as HTMLElement).style.removeProperty('--ffc-note-link-color');
+
+        // Type icon prepended first, status second: prepend() always inserts
+        // as the new first child, so the *later* call ends up leftmost —
+        // this keeps status visually first, matching the `order: -1` used
+        // for the same pairing in the CM6 Live Preview path (see build() in
+        // note-link-view-plugin.ts).
+        if (icon) {
+          const svg = getIcon(icon);
+          if (svg) prependIconSpan(link as HTMLElement, svg, 'ffc-link-icon');
         }
         const status = this.statusNoteMap.get(basename) ?? this.statusNoteMap.get(href);
         if (status) {
           const svg = statusSvg(status);
-          if (svg) {
-            const span = createSpan();
-            span.className = 'ffc-status-icon';
-            span.appendChild(svg);
-            link.prepend(span);
-          }
+          if (svg) prependIconSpan(link as HTMLElement, svg);
         }
       });
     });
@@ -918,6 +926,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       if (obj.enableFindCommand === undefined)   { obj.enableFindCommand = false; needsSave = true; }
       if (obj.showInTriggerMenu === undefined)   { obj.showInTriggerMenu = false; needsSave = true; }
       if (obj.styledLinks === undefined)         { obj.styledLinks = false; needsSave = true; }
+      if (obj.showLinkIcon === undefined)        { obj.showLinkIcon = false; needsSave = true; }
       if (!obj.previewFields)                    { obj.previewFields = [];  needsSave = true; }
       if (!obj.canvasFields)                     { obj.canvasFields = [];   needsSave = true; }
       if (!obj.imageKey)                         { obj.imageKey = '';       needsSave = true; }
@@ -961,6 +970,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.styledNoteBasenames  = new Set();
     this.styledNotePaths      = new Set();
     this.styledNoteColors     = new Map();
+    this.styledNoteIcons      = new Map();
     this.previewNoteBasenames = new Set();
     this.previewNotePaths     = new Set();
     this.statusNoteMap        = new Map();
@@ -976,6 +986,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
           // target (see noteLinkColor), so a basename shared by another note
           // doesn't borrow this type's colour.
           if (color) this.styledNoteColors.set(file.path, color);
+          const icon = noteType.showLinkIcon ? noteType.linkIcon?.trim() : '';
+          if (icon) this.styledNoteIcons.set(file.path, icon);
         }
         if (hasPreview) {
           this.previewNoteBasenames.add(file.basename);
@@ -991,15 +1003,27 @@ export class FilteredFileCommandsPlugin extends Plugin {
     }
   }
 
-  /**
-   * Link colour for a wikilink, resolved against its *actual* target file so a
-   * basename shared with another note can't borrow this type's colour. Returns
-   * undefined when the target isn't a styled note or has no colour set.
+/**
+   * Link colour and icon for a wikilink, resolved against its *actual*
+   * target file (once, shared between both) so a basename shared with
+   * another note can't borrow this type's styling. Empty when the target
+   * isn't a styled note.
    */
-  noteLinkColor(linkpath: string, sourcePath = ''): string | undefined {
-    if (this.styledNoteColors.size === 0 || !linkpath) return undefined;
+  noteLinkStyle(linkpath: string, sourcePath = ''): { color?: string; icon?: string } {
+    if (!linkpath || (this.styledNoteColors.size === 0 && this.styledNoteIcons.size === 0)) return {};
     const dest = this.app.metadataCache.getFirstLinkpathDest(linkpath, sourcePath);
-    return dest ? this.styledNoteColors.get(dest.path) : undefined;
+    if (!dest) return {};
+    return { color: this.styledNoteColors.get(dest.path), icon: this.styledNoteIcons.get(dest.path) };
+  }
+
+  /** Convenience wrapper around `noteLinkStyle()` for color-only call sites. */
+  noteLinkColor(linkpath: string, sourcePath = ''): string | undefined {
+    return this.noteLinkStyle(linkpath, sourcePath).color;
+  }
+
+  /** Convenience wrapper around `noteLinkStyle()` for icon-only call sites. */
+  noteLinkIcon(linkpath: string, sourcePath = ''): string | undefined {
+    return this.noteLinkStyle(linkpath, sourcePath).icon;
   }
 
   refreshNoteLinkStyles(): void {

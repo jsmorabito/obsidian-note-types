@@ -1,9 +1,25 @@
-import { Setting, SettingPage } from 'obsidian';
+import { debounce, getIcon, Setting, SettingPage } from 'obsidian';
+import type { ExtraButtonComponent } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import type { CanvasField, FilterSpec, NoteField, PreviewField } from '../types.ts';
 import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
+import { IconInputSuggest } from './icon-suggest.ts';
+
+/**
+ * Resolves whatever the user typed to a valid Lucide icon id. Accepts both the
+ * full id Obsidian registers (`lucide-check-circle`) and the bare Lucide name
+ * (`check-circle`), since the picker's suggestions supply the former but
+ * typing by hand more naturally produces the latter.
+ */
+function normalizeIconId(raw: string): string {
+  const value = raw.trim();
+  if (!value) return '';
+  if (getIcon(value)) return value;
+  const prefixed = `lucide-${value}`;
+  return getIcon(prefixed) ? prefixed : value;
+}
 
 /** HSL (h in degrees, s and l in percent) → `#rrggbb`. */
 function hslToHex(h: number, s: number, l: number): string {
@@ -195,6 +211,74 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.plugin.refreshNoteLinkStyles();
           })
       );
+
+      const iconSetting = new Setting(contentEl)
+        .setName('Link icon')
+        .setDesc('Lucide icon shown at the start of styled links of this type.');
+
+      let previewBtn: ExtraButtonComponent | undefined;
+      let clearBtn: ExtraButtonComponent | undefined;
+
+      iconSetting.addExtraButton((btn) => {
+        previewBtn = btn;
+        btn.setIcon(obj.linkIcon?.trim() || 'image-off').setDisabled(true);
+        btn.extraSettingsEl.addClass('ffc-icon-preview');
+      });
+      iconSetting.addExtraButton((btn) => {
+        clearBtn = btn;
+        btn.setIcon('x').setTooltip('Clear icon')
+          .setDisabled(!obj.linkIcon?.trim())
+          .onClick(async () => {
+            if (!obj.linkIcon?.trim()) return;
+            obj.linkIcon = undefined;
+            await this.plugin.saveSettings();
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+            this.display();
+          });
+      });
+
+      // Debounced so typing an icon id doesn't trigger a vault-wide rescan
+      // (buildStyledNoteSet) and a document-wide restyle (refreshNoteLinkStyles)
+      // on every keystroke — the preview button/clear button above still update
+      // immediately, so typing still gets instant feedback either way.
+      const scheduleLinkStyleRefresh = debounce(() => {
+        void this.plugin.saveSettings();
+        this.plugin.buildStyledNoteSet();
+        this.plugin.refreshNoteLinkStyles();
+      }, 300, true);
+
+      iconSetting.addText((text) => {
+        text.setPlaceholder('E.g. check-circle').setValue(obj.linkIcon ?? '')
+          .onChange((value) => {
+            obj.linkIcon = normalizeIconId(value) || undefined;
+            const trimmed = obj.linkIcon?.trim();
+            previewBtn?.setIcon(trimmed || 'image-off');
+            clearBtn?.setDisabled(!trimmed);
+            scheduleLinkStyleRefresh();
+          });
+        new IconInputSuggest(this.plugin.app, text.inputEl, (iconId) => {
+          obj.linkIcon = iconId;
+          void this.plugin.saveSettings().then(() => {
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+          });
+          this.display();
+        });
+      });
+
+      new Setting(contentEl)
+        .setName('Show icon in links')
+        .setDesc('When enabled, the icon above is shown at the start of styled links to files of this type.')
+        .addToggle((toggle) =>
+          toggle.setValue(obj.showLinkIcon ?? false)
+            .onChange(async (value) => {
+              obj.showLinkIcon = value;
+              await this.plugin.saveSettings();
+              this.plugin.buildStyledNoteSet();
+              this.plugin.refreshNoteLinkStyles();
+            })
+        );
     }
 
     new Setting(contentEl)

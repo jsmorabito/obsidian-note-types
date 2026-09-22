@@ -48,6 +48,14 @@ export interface NoteType {
    * Blank / undefined falls back to the theme's default tag colours.
    */
   linkColor?: string;
+  /**
+   * Lucide icon id (as returned by Obsidian's `getIconIds()`, e.g.
+   * `lucide-check-circle`) assignable to this note type. Only shown on
+   * styled links when `showLinkIcon` is also on.
+   */
+  linkIcon?: string;
+  /** Toggles whether `linkIcon` is displayed on styled links of this type. */
+  showLinkIcon?: boolean;
   showStatusInLinks?: boolean;
   previewFields: PreviewField[];
   canvasFields: CanvasField[];
