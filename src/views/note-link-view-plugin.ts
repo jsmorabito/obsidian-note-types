@@ -130,12 +130,9 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
             const iconUrl = iconId ? iconMaskUrl(iconId) : null;
 
             // A status-only link (showStatusInLinks on, styledLinks off)
-            // gets no 'ffc-note-link' class, so it has no flex container of
-            // its own — without one, the status icon's `order: -1` (which
-            // needs a flex/grid parent to mean anything) is a no-op and the
-            // icon renders in normal document order (after the text) rather
-            // than pulled to the front. This lightweight host class exists
-            // purely to give it that flex context.
+            // gets no 'ffc-note-link' class; its icon is styled off the bare
+            // style attribute. 'ffc-note-status-host' just marks such links
+            // for anyone targeting them from a snippet.
             const clsParts = [
               isStyled ? 'ffc-note-link' : '',
               isPreview ? 'ffc-note-preview-link' : '',

@@ -155,8 +155,11 @@
   padding: 1px 5px;
   border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
   font-size: var(--tag-size, inherit);
-  display: inline-flex;
-  align-items: center;
+  /* Plain inline (not inline-flex): an atomic inline box can't wrap, so a long
+     link would jump whole to the next line and its fill would stretch to the
+     full line width. Inline padding also doesn't grow the line box. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .markdown-rendered a.internal-link.ffc-note-link:hover,
@@ -283,8 +286,8 @@
   border-radius: var(--radius-xs, 2px);
   padding: 1px 5px;
   border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
-  display: inline-flex;
-  align-items: center;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .cm-editor a.internal-link.ffc-note-link:hover {
@@ -315,8 +318,9 @@
   background: var(--tag-background);
   padding: 1px 0;
   border-radius: var(--radius-xs, 2px);
-  display: inline-flex;
-  align-items: center;
+  /* Plain inline, not inline-flex — see the reading-mode rule above. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   /* Explicit rather than relying on inheriting Obsidian's own cursor:pointer
      from a sibling class (.cm-underline etc.) — the icon pseudo-elements are
      pointer-events:none, so the cursor shown over them is whatever this span
@@ -326,15 +330,6 @@
 
 .cm-editor .ffc-note-link[style*="--ffc-note-link-color"] {
   background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
-}
-
-/* Hosts a status icon on a link that isn't otherwise styled (showStatusInLinks
-   on, styledLinks off — see build() in note-link-view-plugin.ts). No
-   background/padding of its own; this exists purely so the status icon's
-   `order: -1` has a flex container to mean anything in. */
-.cm-editor .ffc-note-status-host {
-  display: inline-flex;
-  align-items: center;
 }
 
 .cm-editor .ffc-note-link:hover {
@@ -359,65 +354,60 @@
   color: var(--ffc-note-link-color) !important;
 }
 
-/* Per-note-type link icon, Live Preview: a CSS mask-image on ::before driven
-   by the same mark decoration's style attribute (see build() in
-   note-link-view-plugin.ts) rather than an appended widget. A widget placed
-   *inside* this span's range forces CM6 to split the mark into multiple
-   sibling spans (breaking the shared background in two); a plain custom
-   property on the mark's own style attribute does not. Coloured via
-   currentColor so it always matches the link's own text colour. Padding goes
-   symmetric (rather than the plain pill's 0 horizontal) so the icon and the
-   trailing text get equal breathing room from the pill's edges. */
+/* Link icons, Live Preview: CSS on ::before driven by the mark decoration's
+   style attribute (see build() in note-link-view-plugin.ts) rather than an
+   appended widget. A widget placed *inside* this span's range forces CM6 to
+   split the mark into multiple sibling spans (breaking the shared background
+   in two); a plain custom property on the mark's own style attribute does not.
+
+   Both icons share the one ::before so they sit ahead of the text while the
+   link stays plain inline (flex `order` isn't available, and inline-flex
+   would make the pill an unwrappable box):
+   - Type icon: a mask over currentColor, so it matches the link's text colour.
+   - Status icon: a background-image, since the status SVGs carry their own
+     per-status colour (e.g. amber for "In Progress") that a mask would drop.
+     Matches on the bare style attribute (not scoped to .ffc-note-link)
+     because a status-only link still gets a mark purely to carry it.
+   - Both: a wider box with two mask layers — the type icon on the right, and
+     a solid block on the left that lets the status background show through. */
 .cm-editor .ffc-note-link[style*="--ffc-note-link-icon"],
 .cm-editor .ffc-note-link[style*="--ffc-note-link-status-icon"] {
   padding: 1px 4px;
 }
 
-.cm-editor .ffc-note-link[style*="--ffc-note-link-icon"]::before {
+.cm-editor .ffc-note-link[style*="--ffc-note-link-icon"]::before,
+.cm-editor [style*="--ffc-note-link-status-icon"]::before {
   content: '';
   display: inline-block;
-  flex-shrink: 0;
   pointer-events: none;
-  position: relative;
-  top: 1px;
-  width: 13px;
   height: 13px;
   margin-right: 3px;
-  background-color: currentColor;
-  -webkit-mask-image: var(--ffc-note-link-icon);
-  mask-image: var(--ffc-note-link-icon);
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
+  vertical-align: -1px;
 }
 
-/* Task/note status icon, Live Preview: background-image (not mask) since the
-   status SVGs carry their own explicit per-status colour baked in (e.g.
-   amber for "In Progress") — a mask would discard that in favour of
-   currentColor. Matches on the bare style attribute (not scoped to
-   .ffc-note-link) because a status-only link that isn't otherwise styled
-   still gets a mark purely to host this custom property. It's a ::after (CM6
-   needs a real, non-widget decoration boundary to hang it on, and ::after is
-   the only slot left once the type icon claims ::before) but `order: -1`
-   pulls it to the front of the flex row regardless — visually first, ahead
-   of even the type icon — matching where it rendered before this rework. */
-.cm-editor [style*="--ffc-note-link-status-icon"]::after {
-  content: '';
-  display: inline-block;
-  flex-shrink: 0;
-  pointer-events: none;
-  order: -1;
+.cm-editor .ffc-note-link[style*="--ffc-note-link-icon"]::before {
+  width: 13px;
+  background-color: currentColor;
+  -webkit-mask: var(--ffc-note-link-icon) center / contain no-repeat;
+  mask: var(--ffc-note-link-icon) center / contain no-repeat;
+}
+
+.cm-editor [style*="--ffc-note-link-status-icon"]::before {
   width: 12px;
-  height: 12px;
-  margin-right: 3px;
-  vertical-align: -2px;
-  background-image: var(--ffc-note-link-status-icon);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+  background: var(--ffc-note-link-status-icon) center / contain no-repeat;
+}
+
+.cm-editor .ffc-note-link[style*="--ffc-note-link-icon"][style*="--ffc-note-link-status-icon"]::before {
+  width: 28px; /* 12px status + 3px gap + 13px type */
+  background:
+    var(--ffc-note-link-status-icon) left center / 12px 12px no-repeat,
+    linear-gradient(currentColor, currentColor) right center / 13px 13px no-repeat;
+  -webkit-mask:
+    var(--ffc-note-link-icon) right center / 13px 13px no-repeat,
+    linear-gradient(#000, #000) left center / 12px 13px no-repeat;
+  mask:
+    var(--ffc-note-link-icon) right center / 13px 13px no-repeat,
+    linear-gradient(#000, #000) left center / 12px 13px no-repeat;
 }
 
 /* Target the inner CM6 link spans directly — you can't cancel a child's
