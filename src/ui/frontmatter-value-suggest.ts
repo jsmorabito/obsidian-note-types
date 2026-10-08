@@ -1,3 +1,4 @@
+import { allTags } from '../utils/obsidian-internals.ts';
 import { App, setIcon } from 'obsidian';
 
 /**
@@ -53,14 +54,9 @@ export class FrontmatterValueSuggest {
   private getVaultValues(): string[] {
     const values = new Set<string>();
     if (this.key === 'tags' || this.key === 'tag') {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
-         getTags() isn't part of the public MetadataCache typings. */
-      const tags = (this.app.metadataCache as any).getTags() ?? {};
-      for (const tag of Object.keys(tags)) {
+      for (const tag of allTags(this.app.metadataCache)) {
         values.add(tag.startsWith('#') ? tag.slice(1) : tag);
       }
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
-         End of the getTags() reflection block. */
     }
     for (const file of this.app.vault.getMarkdownFiles()) {
       const raw: unknown = this.app.metadataCache.getFileCache(file)?.frontmatter?.[this.key];

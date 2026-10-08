@@ -75,42 +75,46 @@ export function ffwFuzzyMatch(query: string, str: string): boolean {
   return n === q.length;
 }
 
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
-   Reflects into the third-party "Iconic" community plugin's internals, which publishes no types
-   and whose shape can change without notice; every access below is already defensively guarded. */
-/** Read a file's icon/color from the Iconic plugin if installed. */
+const asRecord = (v: unknown): Record<string, unknown> | null =>
+  typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : null;
+
+/** An icon (and optional colour) out of one of Iconic's stored entries, or null when it has none. */
+function iconicEntry(entry: unknown, allowDefault: boolean): { icon: string; color: string | null } | null {
+  const r = asRecord(entry);
+  const icon = allowDefault ? (r?.icon ?? r?.iconDefault) : r?.icon;
+  if (typeof icon !== 'string' || icon === '') return null;
+  return { icon, color: typeof r?.color === 'string' ? r.color : null };
+}
+
+/**
+ * Read a file's icon/color from the Iconic plugin if installed. Iconic is a
+ * third-party plugin that publishes no types and can change its internals at any
+ * time, so everything is read as `unknown` and checked before use.
+ */
 export function ffwGetIconicIcon(app: App, file: TFile): { icon: string; color?: string | null } | null {
   try {
-    const plugins = (app as any).plugins?.plugins;
-    if (!plugins) return null;
-    const iconic = plugins.iconic;
+    const registry = asRecord((app as App & { plugins?: unknown }).plugins);
+    const iconic = asRecord(asRecord(registry?.plugins)?.iconic);
     if (!iconic) return null;
     if (typeof iconic.getFileItem === 'function') {
-      const item = iconic.getFileItem(file.path);
-      if (item?.icon) return item;
+      const item = (iconic.getFileItem as (path: string) => unknown).call(iconic, file.path);
+      const hit = iconicEntry(item, false);
+      if (hit) return hit;
     }
-    const lm = iconic.ruleManager;
-    if (lm?.fileRulings instanceof Map) {
-      const c = lm.fileRulings.get(file.path);
-      if (c) {
-        const icon = c.icon ?? c.iconDefault ?? null;
-        if (icon) return { icon, color: c.color ?? null };
-      }
+    const rulings = asRecord(iconic.ruleManager)?.fileRulings;
+    if (rulings instanceof Map) {
+      const hit = iconicEntry(rulings.get(file.path), true);
+      if (hit) return hit;
     }
     for (const src of [iconic.settings, iconic.data]) {
-      if (!src) continue;
       for (const key of ['fileIcons', 'file', 'files']) {
-        const store = src[key];
-        if (!store) continue;
-        const entry = store[file.path];
-        if (entry?.icon) return entry;
+        const hit = iconicEntry(asRecord(asRecord(src)?.[key])?.[file.path], false);
+        if (hit) return hit;
       }
     }
   } catch { /* ignore */ }
   return null;
 }
-/* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-return --
-   End of the Iconic-plugin reflection block. */
 
 /** Render an icon string (Lucide id or emoji) into an element, with optional color. */
 export function ffwSetIconEl(el: HTMLElement, icon: string, color: string | null | undefined): void {

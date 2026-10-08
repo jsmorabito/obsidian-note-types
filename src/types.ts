@@ -61,7 +61,6 @@ export interface NoteType {
   canvasFields: CanvasField[];
   imageKey?: string;
   showImageInPreview?: boolean;
-  showImageInCanvas?: boolean;
 }
 
 export interface RelationType {

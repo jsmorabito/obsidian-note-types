@@ -4,6 +4,7 @@ import { FfwSection } from '../types.ts';
 import { FFW_VIEW_TYPE, ffwGetSectionFiles, ffwFuzzyMatch, ffwGetIconicIcon, ffwSetIconEl, ffwSortLabel, ffwNewSectionId } from '../utils/ffw-utils.ts';
 import { FfwSectionEditModal } from './ffw-section-edit-modal.ts';
 import { TFile } from 'obsidian';
+import { corePlugins } from '../utils/obsidian-internals.ts';
 
 export class FilteredFilesWidgetView extends ItemView {
   private query        = '';
@@ -164,15 +165,11 @@ export class FilteredFilesWidgetView extends ItemView {
         .onClick(() => this.app.workspace.openLinkText(file.path, '', true)));
       menu.addItem((item) => item.setTitle('Reveal in file explorer').setIcon('folder')
         .onClick(() => {
-          /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-             Core plugin internals (app.internalPlugins) aren't part of the public Obsidian API. */
-          const fe   = (this.app as any).internalPlugins?.getPluginById?.('file-explorer');
-          const inst = fe?.instance;
+          const inst = corePlugins(this.app)?.getPluginById?.('file-explorer')?.instance as
+            { revealInFolder?: (file: TFile) => void } | undefined;
           if (inst?.revealInFolder) {
             try { inst.revealInFolder(file); return; } catch { /* ignore */ }
           }
-          /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-             End of the internalPlugins reflection block. */
           new Notice('Could not reveal file in the file explorer.');
         }));
       menu.showAtMouseEvent(e);

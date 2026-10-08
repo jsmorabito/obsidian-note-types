@@ -61,36 +61,6 @@ export function uniqueCommandSlug(name: string, taken: Set<string>): string {
 }
 
 /**
- * Collect every distinct frontmatter value used for `key` across the vault,
- * sorted case-insensitively. For tag/tags keys the tag cache is also consulted.
- */
-export function getVaultValuesForKey(app: App, key: string): string[] {
-  const values = new Set<string>();
-  if (key === 'tags' || key === 'tag') {
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
-       getTags() isn't part of the public MetadataCache typings. */
-    const tags = (app.metadataCache as any).getTags() ?? {};
-    for (const tag of Object.keys(tags)) {
-      values.add(tag.startsWith('#') ? tag.slice(1) : tag);
-    }
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument --
-       End of the getTags() reflection block. */
-  }
-  for (const file of app.vault.getMarkdownFiles()) {
-    const raw: unknown = app.metadataCache.getFileCache(file)?.frontmatter?.[key];
-    if (raw == null) continue;
-    if (Array.isArray(raw)) {
-      (raw as unknown[]).forEach((v) => { if (v != null) values.add(stringifyFrontmatterValue(v).trim()); });
-    } else {
-      const s = stringifyFrontmatterValue(raw).trim();
-      if (s) values.add(s);
-    }
-  }
-  return [...values].filter(Boolean)
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-}
-
-/**
  * Render the extra frontmatter fields defined on a note type into a container.
  * Attaches vault-wide autocomplete to every field input.
  */

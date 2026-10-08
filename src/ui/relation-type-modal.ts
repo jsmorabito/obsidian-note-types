@@ -37,7 +37,7 @@ export class RelationTypeModal extends Modal {
 
     new Setting(contentEl)
       .setName('Name')
-      .setDesc('Label shown in the "Mark as…" menu, e.g. "Related to" or "Blocks".')
+      .setDesc('The relation’s name in menus, for example related to or blocks.')
       .addText((text) => text
         .setPlaceholder('E.g. Blocks')
         .setValue(rt.name ?? '')
@@ -50,7 +50,7 @@ export class RelationTypeModal extends Modal {
       .setName('Frontmatter key')
       .setDesc('Property key written on the note you mark, e.g. "blocks".')
       .addText((text) => text
-        .setPlaceholder('E.g. blocks')
+        .setPlaceholder('Example: blocks')
         .setValue(rt.frontmatterKey ?? '')
         .onChange(async (value) => {
           rt.frontmatterKey = value.trim();
@@ -59,7 +59,7 @@ export class RelationTypeModal extends Modal {
 
     new Setting(contentEl)
       .setName('Reverse label')
-      .setDesc('Label from the target’s side, e.g. "Blocked by". Leave blank if the relation reads the same both ways.')
+      .setDesc('The name from the target note’s side, for example blocked by. Leave blank if the relation reads the same both ways.')
       .addText((text) => text
         .setPlaceholder('E.g. Blocked by')
         .setValue(rt.reverseName ?? '')
@@ -72,7 +72,7 @@ export class RelationTypeModal extends Modal {
       .setName('Reverse frontmatter key')
       .setDesc('Property key written back on the target note. Leave blank to reuse the key above, or to derive one from the reverse label when that label differs.')
       .addText((text) => text
-        .setPlaceholder('E.g. blocked_by')
+        .setPlaceholder('Example: blocked_by')
         .setValue(rt.reverseKey ?? '')
         .onChange(async (value) => {
           rt.reverseKey = value.trim();

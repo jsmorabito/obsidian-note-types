@@ -80,7 +80,7 @@ export class FfwSectionEditModal extends Modal {
 
     new Setting(contentEl)
       .setName('Result limit')
-      .setDesc('Maximum number of files to show. 0 means unlimited.')
+      .setDesc('Maximum number of files to show, or 0 for no limit.')
       .addText((text) => text
         .setPlaceholder('0')
         .setValue(String(this.working.maxResults))
@@ -183,8 +183,8 @@ export class FfwSectionEditModal extends Modal {
 
   private renderPathInputs(el: HTMLElement, filter: FfwPathFilter, idx: number): void {
     const negateSelect = el.createEl('select', { cls: 'dropdown' });
-    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
-    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected =  filter.negate;
+    negateSelect.createEl('option', { value: 'is',     text: 'Is'     }).selected = !filter.negate;
+    negateSelect.createEl('option', { value: 'is-not', text: 'Is not' }).selected =  filter.negate;
     negateSelect.addEventListener('change', () => {
       (this.working.filters[idx] as FfwPathFilter).negate = negateSelect.value === 'is-not';
     });
@@ -204,8 +204,8 @@ export class FfwSectionEditModal extends Modal {
 
   private renderNameInputs(el: HTMLElement, filter: FfwNameFilter, idx: number): void {
     const negateSelect = el.createEl('select', { cls: 'dropdown' });
-    negateSelect.createEl('option', { value: 'is',     text: 'is'     }).selected = !filter.negate;
-    negateSelect.createEl('option', { value: 'is-not', text: 'is not' }).selected =  filter.negate;
+    negateSelect.createEl('option', { value: 'is',     text: 'Is'     }).selected = !filter.negate;
+    negateSelect.createEl('option', { value: 'is-not', text: 'Is not' }).selected =  filter.negate;
     negateSelect.addEventListener('change', () => {
       (this.working.filters[idx] as FfwNameFilter).negate = negateSelect.value === 'is-not';
     });

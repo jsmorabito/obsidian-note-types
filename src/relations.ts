@@ -11,6 +11,12 @@ import { stringifyFrontmatterValue } from './utils/helpers.ts';
 
 export const BUILTIN_RELATION_TYPE_ID = 'related-to';
 
+/** Which notes' frontmatter a relation touches: the source's forward key, the target's reverse key. */
+export interface RelationSides {
+  forward: boolean;
+  reverse: boolean;
+}
+
 /** The built-in generic "Related to" relation. */
 export function defaultRelationType(): RelationType {
   return {

@@ -478,26 +478,89 @@
 /* Ghost card — fixed-position so it follows the viewport cursor exactly.
    Styled to match Obsidian's own canvas drag-ghost: rounded card outline
    with a semi-transparent accent fill and shadow. */
-.ffc-canvas-drop-ghost {
+/* ── Canvas tools: toolbar, placement, free text ─────────────────────────── */
+
+/*
+ * Our tools live in Obsidian's own bottom card menu, and the whole menu becomes one bar with a single
+ * border (like the groups of controls on the right), so every control reads as part of the same set.
+ */
+.canvas-card-menu {
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--input-shadow);
+}
+
+/* The tools you pick: control items in a row, centred against the taller card menu buttons. */
+.canvas-card-menu .ffc-menu-tools {
+  display: flex;
+  align-self: center;
+  gap: var(--size-2-1);
+  padding-inline: var(--size-4-1);
+}
+
+/*
+ * The bar has the border, so the items need neither their own divider nor a different background.
+ * Core's control items are square-cornered; rounding them gives the hover and active states the
+ * soft squares.
+ */
+.canvas-card-menu .ffc-menu-tools .canvas-control-item {
+  border-bottom: 0;
+  border-radius: var(--radius-m);
+  background-color: transparent;
+}
+
+.canvas-card-menu .ffc-menu-tools .canvas-control-item:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Core fills its menu icons with the page colour; the note types icon takes the same fill. */
+.canvas-card-menu .canvas-card-menu-button {
+  --ffc-icon-fill: var(--background-primary);
+}
+
+.theme-dark .canvas-card-menu .canvas-card-menu-button {
+  --ffc-icon-fill: var(--background-secondary);
+}
+
+.ffc-tool-placing .canvas-wrapper {
+  cursor: crosshair;
+}
+
+.ffc-canvas-ghost {
   position: fixed;
   display: none;
   pointer-events: none;
-  transform: translate(-50%, -50%);
-  width: var(--ffc-ghost-w);
-  height: var(--ffc-ghost-h);
-  left: var(--ffc-ghost-x, 0);
-  top: var(--ffc-ghost-y, 0);
-  border-radius: var(--radius-l);
+  left: var(--ffc-x, 0);
+  top: var(--ffc-y, 0);
+  width: var(--ffc-w, 0);
+  height: var(--ffc-h, 0);
   border: 2px solid var(--interactive-accent);
-  background: color-mix(in srgb, var(--interactive-accent) 10%, var(--background-primary) 90%);
-  box-shadow: var(--shadow-l);
-  opacity: 0.9;
-  /* z-index sits above canvas nodes but below Obsidian modals */
-  z-index: var(--layer-notice, 200);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
 }
 
-.ffc-canvas-drop-ghost.is-visible {
+.ffc-canvas-ghost.is-visible {
   display: block;
+}
+
+/* Free text (a text node marked as free text) has no card chrome until hovered or selected. */
+.canvas-node[data-ffc-kind="text"] .canvas-node-container {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.canvas-node[data-ffc-kind="text"]:hover .canvas-node-container,
+.canvas-node[data-ffc-kind="text"].is-selected .canvas-node-container,
+.canvas-node[data-ffc-kind="text"].is-focused .canvas-node-container,
+.canvas-node[data-ffc-kind="text"].is-themed .canvas-node-container {
+  border-color: var(--background-modifier-border);
+}
+
+/* Core marks any coloured node `is-themed` and sets --canvas-color (a plain colour) on it; free text takes it as its text colour. */
+.canvas-node[data-ffc-kind="text"].is-themed .canvas-node-content {
+  color: var(--canvas-color);
 }
 
 
@@ -863,4 +926,565 @@
 .ffc-notice-link {
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ── Ink: a stroke is a chrome-less text node holding an inline SVG ──────── */
+
+/* `.is-themed` is core's rule for coloured nodes (a tint and an inset border); match its specificity to clear it. */
+.canvas-node[data-ffc-kind="ink"] .canvas-node-container,
+.canvas-node[data-ffc-kind="ink"].is-themed .canvas-node-container {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Core outlines a selected node with its border plus a 2px accent ring; match it so these aren't thinner. */
+.canvas-node[data-ffc-kind="ink"].is-selected .canvas-node-container,
+.canvas-node[data-ffc-kind="ink"].is-focused .canvas-node-container {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-border-accent);
+}
+
+/* No connection handles: edges don't attach to strokes. */
+.canvas-node[data-ffc-kind="ink"] .canvas-node-connection-point {
+  display: none;
+}
+
+/*
+ * Core pads a text node's preview (`padding: 0 var(--size-4-4)`), adds flex spacer
+ * pseudo-elements above and below it, and tints coloured nodes on the content element.
+ * Match core's selector chain so the SVG fills the node edge to edge, uncoloured and untinted.
+ */
+.canvas-node[data-ffc-kind="ink"] .canvas-node-content,
+.canvas-node[data-ffc-kind="ink"].is-themed .canvas-node-content {
+  background: transparent;
+}
+
+.canvas-node[data-ffc-kind="ink"] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view {
+  display: block;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  overflow: hidden;
+}
+
+.canvas-node[data-ffc-kind="ink"] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view::before,
+.canvas-node[data-ffc-kind="ink"] .canvas-node-content.markdown-embed > .markdown-embed-content > .markdown-preview-view::after {
+  display: none;
+}
+
+.canvas-node[data-ffc-kind="ink"] .markdown-preview-sizer,
+.canvas-node[data-ffc-kind="ink"] .markdown-embed-content {
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  min-height: 0;
+}
+
+.canvas-node[data-ffc-kind="ink"] p {
+  margin: 0;
+}
+
+.canvas-node[data-ffc-kind="ink"] svg.ffc-ink {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Uncolored ink follows the theme's text colour in the canvas; the file keeps a dark fallback for other readers. */
+svg.ffc-ink path.ffc-ink-auto {
+  fill: var(--text-normal);
+}
+
+.canvas-node.ffc-ink-erasing {
+  opacity: 0.3;
+  transition: opacity 100ms ease-out;
+}
+
+.ffc-ink-preview {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: var(--layer-cover);
+  pointer-events: none;
+  color: var(--text-normal);
+}
+
+.ffc-pen-colors {
+  position: absolute;
+  bottom: calc(100% + var(--size-4-2));
+  left: 50%;
+  transform: translateX(-50%);
+  gap: var(--size-4-2);
+  padding: var(--size-4-2);
+}
+
+.ffc-pen-colors .canvas-color-picker-item {
+  cursor: var(--cursor);
+}
+
+/* ── Canvas note cards (file nodes for typed notes) ──────────────────────── */
+
+.ffc-note-chip {
+  display: inline-block;
+  padding: 0 var(--size-4-2);
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+}
+
+.ffc-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-4-2);
+}
+
+/* Note card: key image, title and preview in place of the full embed. */
+.canvas-node[data-ffc-view="card"] .canvas-node-content,
+.canvas-node[data-ffc-view="link"] .canvas-node-content {
+  display: none;
+}
+
+.canvas-node[data-ffc-view="card"] .canvas-node-container {
+  position: relative;
+}
+
+.ffc-note-card {
+  /* Read back by key-image.ts to size the card, so the two can't drift apart. */
+  --ffc-card-image-max: 250px;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-4-2);
+  padding: var(--size-4-3);
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--background-primary);
+  pointer-events: none;
+}
+
+/* Centre the content when it fits; auto margins (unlike `justify-content: center`) never clip the top when it doesn't. */
+.ffc-note-card > :first-child {
+  margin-top: auto;
+}
+
+.ffc-note-card > :last-child {
+  margin-bottom: auto;
+}
+
+.ffc-note-card-img {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: var(--ffc-card-image-max);
+  width: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-s);
+}
+
+.ffc-note-card-title {
+  flex: none;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  overflow: hidden;
+  font-size: var(--font-ui-large);
+  font-weight: var(--font-semibold);
+  line-height: var(--line-height-tight);
+  color: var(--text-normal);
+}
+
+/* The type's configured properties, under the title. */
+.ffc-note-card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-1);
+  flex: none;
+}
+
+.ffc-note-card-field {
+  display: flex;
+  gap: var(--size-4-1);
+  font-size: var(--font-ui-smaller);
+  line-height: var(--line-height-tight);
+}
+
+.ffc-note-card-field-label {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.ffc-note-card-field-label::after {
+  content: ":";
+}
+
+.ffc-note-card-field-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Styled link view: the note as the link pill from the editor, with no card around it. The node
+ * is resized to fit the pill, so its box (and the edges that attach to it) hug the link.
+ */
+.canvas-node[data-ffc-view="link"] .canvas-node-container,
+.canvas-node[data-ffc-view="link"].is-themed .canvas-node-container {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Core outlines a selected node with its border plus a 2px accent ring; match it so these aren't thinner. */
+.canvas-node[data-ffc-view="link"].is-selected .canvas-node-container,
+.canvas-node[data-ffc-view="link"].is-focused .canvas-node-container {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-border-accent);
+}
+
+.ffc-link-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  font-size: var(--font-text-size);
+  pointer-events: none;
+}
+
+/*
+ * The link is the whole node: a block-level flex box, so there is no line box around it to leave a
+ * gap, and the icons centre against the text. Its fill is what the selection outline hugs.
+ */
+.ffc-link-pill a.internal-link.ffc-note-link,
+.ffc-link-pill a.internal-link:not(.ffc-note-link) {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  width: max-content;
+  padding: var(--size-2-2) var(--size-4-2);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+}
+
+/*
+ * A note type with "Style note links" off gets no `ffc-note-link` class from the link processing, and the
+ * plugin's link refresh removes it again if anything adds it, so give those links the same pill here.
+ */
+.ffc-link-pill a.internal-link:not(.ffc-note-link) {
+  --link-decoration: none;
+  --link-decoration-hover: none;
+  text-decoration: none;
+  background: var(--tag-background);
+  color: var(--tag-color);
+  border: var(--tag-border-width, 0px) solid var(--tag-border-color, transparent);
+  border-radius: var(--radius-s);
+  font-size: var(--tag-size, inherit);
+}
+
+/* In a flex row the icons are centred by the row, so drop the inline-text nudges. */
+.ffc-link-pill .ffc-status-icon {
+  margin-right: 0;
+  vertical-align: baseline;
+}
+
+.ffc-link-pill .ffc-link-icon {
+  top: 0;
+}
+
+/* Corners of the outline and the fill agree. */
+.canvas-node[data-ffc-view="link"] .canvas-node-container {
+  border-radius: var(--radius-s);
+}
+
+.ffc-link-pill-body p {
+  margin: 0;
+}
+
+/*
+ * The note type's link colour, when its links are styled, on its card: the same tint-and-text pairing
+ * the link pills use (and, below, on the border). A card is opaque (it hides the canvas dots), so its tint is mixed over the page colour.
+ */
+.canvas-node[style*="--ffc-note-link-color"] .ffc-note-card {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 15%, var(--background-primary));
+}
+
+/*
+ * The border takes the colour too, the way core draws a card whose colour has been changed: the 1px border
+ * plus an inset 1px ring, both at 70% of the colour (mixed in oklch, as core does). Selected cards keep core's accent outline so selection
+ * stays clear, and a styled link has no card around it to colour.
+ */
+.canvas-node[data-ffc-view="card"][style*="--ffc-note-link-color"]:not(.is-selected):not(.is-focused) .canvas-node-container,
+.canvas-node[data-ffc-view="embed"][style*="--ffc-note-link-color"]:not(.is-selected):not(.is-focused) .canvas-node-container {
+  border-color: color-mix(in oklch, var(--ffc-note-link-color) 70%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--ffc-note-link-color) 70%, transparent), var(--shadow-stationary);
+}
+
+.canvas-node[style*="--ffc-note-link-color"] .ffc-note-card-title {
+  color: var(--ffc-note-link-color);
+}
+
+/* Obsidian's own label shows the file name, as it does for any file on a canvas. A styled link shows the name in its pill, so the label goes there. */
+.canvas-node[data-ffc-view="link"] .canvas-node-label {
+  display: none;
+}
+
+/* ── Relations ───────────────────────────────────────────────────────────── */
+
+.ffc-relation-menu {
+  padding: var(--size-4-3);
+}
+
+.ffc-relation-menu .modal-close-button {
+  display: none;
+}
+
+.ffc-relation-input {
+  width: 100%;
+  margin-bottom: var(--size-4-2);
+}
+
+.ffc-relation-list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.ffc-relation-section {
+  padding: var(--size-4-2) var(--size-4-2) var(--size-2-1);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: var(--text-faint);
+}
+
+.ffc-relation-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--size-4-3);
+  padding: var(--size-2-3) var(--size-4-2);
+  border-radius: var(--radius-s);
+  cursor: var(--cursor);
+}
+
+.ffc-relation-row.is-selected {
+  background: var(--background-modifier-hover);
+}
+
+.ffc-relation-hint {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  text-align: right;
+}
+
+.ffc-relation-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-2);
+}
+
+/* Core sets the stroke through `.canvas-edges path.canvas-display-path` and scales it with the zoom; match both. */
+.canvas-edges g.ffc-relation-edge path.canvas-display-path {
+  stroke-width: calc(3px * var(--zoom-multiplier));
+}
+
+.canvas-edges g.ffc-relation-edge.is-focused path.canvas-display-path,
+.canvas:not(.is-connecting) .canvas-edges g.ffc-relation-edge:hover path.canvas-display-path {
+  stroke-width: calc(6.5px * var(--zoom-multiplier));
+}
+
+.ffc-relation-label .canvas-path-label {
+  padding-inline: calc(var(--size-4-2) * var(--zoom-multiplier));
+  border: calc(1px * var(--zoom-multiplier)) solid var(--background-modifier-border-hover);
+  border-radius: var(--radius-xl);
+  font-weight: var(--font-semibold);
+  cursor: default;
+}
+
+/* ── Context panel ───────────────────────────────────────────────────────── */
+
+.ffc-context-panel {
+  /* Core's right-hand canvas controls: one icon plus its padding. Sit beside them. */
+  --ffc-controls-width: calc(var(--icon-s) + 2 * var(--size-4-2));
+  position: absolute;
+  top: var(--size-4-2);
+  right: calc(var(--size-4-2) + var(--ffc-controls-width) + var(--size-4-2));
+  z-index: var(--layer-cover);
+  width: 16em;
+  max-width: calc(50% - var(--size-4-6));
+  max-height: 60%;
+  overflow-y: auto;
+  padding: var(--size-4-3);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+}
+
+.ffc-context-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-1);
+  margin-bottom: var(--size-4-2);
+  font-weight: var(--font-semibold);
+}
+
+.ffc-context-title {
+  cursor: var(--cursor-link);
+}
+
+.ffc-context-title:hover {
+  color: var(--text-accent);
+}
+
+.ffc-context-empty {
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+}
+
+.ffc-context-group {
+  margin-top: var(--size-4-2);
+}
+
+.ffc-context-group-title {
+  margin-bottom: var(--size-2-1);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  color: var(--text-faint);
+}
+
+.ffc-context-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--size-4-1);
+  padding: var(--size-2-1) 0;
+  font-size: var(--font-ui-small);
+}
+
+.ffc-context-item .ffc-context-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ffc-context-action {
+  --icon-size: var(--icon-xs);
+  flex: none;
+  align-self: center;
+}
+
+/* ── Layers panel ────────────────────────────────────────────────────────── */
+
+.ffc-layers-panel {
+  position: absolute;
+  top: var(--size-4-2);
+  left: var(--size-4-2);
+  z-index: var(--layer-cover);
+  display: flex;
+  flex-direction: column;
+  width: 14em;
+  max-height: calc(100% - var(--size-4-4));
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+}
+
+/* The collapsed state is core's own control group, placed like the ones on the right. */
+.ffc-layers-show {
+  position: absolute;
+  top: var(--size-4-2);
+  left: var(--size-4-2);
+  z-index: var(--layer-cover);
+}
+
+.ffc-layers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--size-2-2) var(--size-2-2) var(--size-2-2) var(--size-4-3);
+}
+
+.ffc-layers-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+/* Obsidian's search box and dropdown, stacked. Only spacing is set here. */
+.ffc-layers-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-2-2);
+  padding: 0 var(--size-2-2) var(--size-2-2);
+}
+
+.ffc-layers-filters .dropdown {
+  width: 100%;
+}
+
+/* A group shown only because something inside it matches. */
+.ffc-layer-row.is-dimmed {
+  color: var(--text-faint);
+}
+
+.ffc-layers-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--size-2-2) var(--size-2-2);
+}
+
+.ffc-layers-empty {
+  padding: var(--size-4-2);
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+}
+
+.ffc-layer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
+  padding: var(--size-2-2) var(--size-4-2);
+  padding-left: calc(var(--size-4-2) + var(--ffc-depth, 0) * var(--size-4-4));
+  border-radius: var(--radius-s);
+  font-size: var(--font-ui-small);
+  cursor: var(--cursor);
+}
+
+.ffc-layer-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.ffc-layer-row.is-selected {
+  background: var(--background-modifier-active-hover);
+}
+
+.ffc-layer-row.is-group {
+  font-weight: var(--font-semibold);
+}
+
+.ffc-layer-icon {
+  --icon-size: var(--icon-xs);
+  display: flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.ffc-layer-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-node.ffc-layer-hover .canvas-node-container {
+  outline: 2px solid var(--interactive-accent);
 }

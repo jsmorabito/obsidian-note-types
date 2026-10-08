@@ -1,16 +1,5 @@
 export const VALID_STATUSES = new Set(["Backlog", "Todo", "In Progress", "Done", "Cancelled"]);
 
-export function statusToClass(status: string): string {
-  switch (status) {
-    case "Backlog":     return 'ffc-status-backlog';
-    case "Todo":        return 'ffc-status-todo';
-    case "In Progress": return 'ffc-status-in-progress';
-    case "Done":        return 'ffc-status-done';
-    case "Cancelled":   return 'ffc-status-cancelled';
-    default:            return '';
-  }
-}
-
 const STATUS_SVG_MARKUP: Record<string, string> = {
   "Backlog": `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#A1A1A1" stroke-width="2" stroke-linecap="round" stroke-dasharray="4 4"/></svg>`,
   "Todo": `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="9" stroke="#A1A1A1" stroke-width="2" stroke-linecap="round"/></svg>`,

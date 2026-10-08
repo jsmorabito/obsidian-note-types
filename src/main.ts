@@ -1,8 +1,8 @@
-import { getIcon, Notice, Plugin, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { getIcon, Notice, Plugin, TFile } from 'obsidian';
 import { DEFAULT_SETTINGS, MyPluginSettingTab } from './settings.ts';
 import { PluginSettings, NoteType, CommandSpec, RelationType } from './types.ts';
 import {
-  ensureRelationTypes, resolvedRelation, linkResolvesTo, resolveLinktext,
+  ensureRelationTypes, resolvedRelation, linkResolvesTo, resolveLinktext, RelationSides,
   relationLinkText, stripLinktext, toEntryArray, collapseEntries,
 } from './relations.ts';
 import { RelationTargetModal } from './ui/relation-target-modal.ts';
@@ -16,7 +16,8 @@ import { NewNoteModal } from './ui/new-note-modal.ts';
 import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
 import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
-import { CanvasNoteSwitcher, ObsidianCanvas } from './ui/canvas-note-switcher.ts';
+import { registerCanvasTools } from './canvas/index.ts';
+import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
 import type { TriggerProvider } from './trigger-registry.ts';
@@ -159,13 +160,11 @@ export class FilteredFileCommandsPlugin extends Plugin {
         const from = editor.getCursor('from');
         const to   = editor.getCursor('to');
 
-        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-           `setSubmenu` isn't part of the public Obsidian Menu typings. */
         menu.addItem((item) => {
           item.setTitle('Note from selection').setIcon('box-select');
-          const submenu = (item as any).setSubmenu();
+          const submenu = submenuOf(item);
           for (const noteType of types) {
-            submenu.addItem((subItem: any) => {
+            submenu.addItem((subItem) => {
               subItem.setTitle(noteType.name)
                 .onClick(() => {
                   const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
@@ -189,8 +188,6 @@ export class FilteredFileCommandsPlugin extends Plugin {
             });
           }
         });
-        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-           End of the Menu.setSubmenu reflection block. */
       })
     );
 
@@ -204,22 +201,20 @@ export class FilteredFileCommandsPlugin extends Plugin {
         const noteTypes = this.settings.noteTypes;
         const existing  = this.listRelationsForFile(file);
 
-        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-           `setSubmenu` isn't part of the public Obsidian Menu typings. */
         menu.addItem((item) => {
           item.setTitle('Mark as…').setIcon('link');
-          const relMenu = (item as any).setSubmenu();
+          const relMenu = submenuOf(item);
           for (const rt of relTypes) {
-            relMenu.addItem((relItem: any) => {
+            relMenu.addItem((relItem) => {
               relItem.setTitle(rt.name || 'Untitled relation');
-              const typeMenu = relItem.setSubmenu();
-              typeMenu.addItem((i: any) => {
+              const typeMenu = submenuOf(relItem);
+              typeMenu.addItem((i) => {
                 i.setTitle('Any note…')
                   .onClick(() => this.pickRelationTarget(file, rt, this.app.vault.getMarkdownFiles()));
               });
               if (noteTypes.length > 0) typeMenu.addSeparator();
               for (const nt of noteTypes) {
-                typeMenu.addItem((i: any) => {
+                typeMenu.addItem((i) => {
                   i.setTitle(nt.name || 'Untitled note type')
                     .onClick(() => this.pickRelationTarget(file, rt, this.getNoteTypeFiles(nt)));
                 });
@@ -231,146 +226,19 @@ export class FilteredFileCommandsPlugin extends Plugin {
         if (existing.length > 0) {
           menu.addItem((item) => {
             item.setTitle('Unmark…').setIcon('unlink');
-            const unmarkMenu = (item as any).setSubmenu();
+            const unmarkMenu = submenuOf(item);
             for (const rel of existing) {
-              unmarkMenu.addItem((i: any) => {
+              unmarkMenu.addItem((i) => {
                 i.setTitle(`${rel.label}: ${rel.targetFile ? rel.targetFile.basename : rel.linktext}`)
                   .onClick(() => { void this.removeRelation(file, rel); });
               });
             }
           });
         }
-        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-           End of the Menu.setSubmenu reflection block. */
       })
     );
 
-    // ── Canvas card menu buttons ────────────────────────────────────────────────
-    this.injectCanvasButtons();
-    this.registerEvent(
-      this.app.workspace.on('active-leaf-change', () => {
-        window.setTimeout(() => this.injectCanvasButtons(), 50);
-      })
-    );
-    this.registerEvent(
-      this.app.workspace.on('layout-change', () => {
-        window.setTimeout(() => this.injectCanvasButtons(), 50);
-      })
-    );
-  }
-
-  // ── Canvas card menu button ───────────────────────────────────────────────────
-
-  injectCanvasButtons(): void {
-    this.app.workspace.iterateAllLeaves((leaf) => this._injectIntoCanvasLeaf(leaf));
-  }
-
-  private _injectIntoCanvasLeaf(leaf: WorkspaceLeaf): void {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- WorkspaceLeaf.view has no canvas-specific public type.
-    const view = leaf?.view as any;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access -- see above.
-    if (view?.getViewType?.() !== 'canvas') return;
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
-    const container = view.containerEl as HTMLElement;
-    const menuEl    = container.querySelector('.canvas-card-menu');
-    if (!menuEl || menuEl.querySelector('.ffc-canvas-note-btn')) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- see above.
-    const canvas = view.canvas as ObsidianCanvas;
-
-    const btn = menuEl.createDiv({
-      cls: 'canvas-card-menu-button mod-draggable ffc-canvas-note-btn',
-    });
-    btn.setAttribute('aria-label', 'Add note card');
-    btn.setAttribute('data-tooltip-position', 'top');
-    setIcon(btn, 'shapes');
-
-    const wrapperEl = canvas.wrapperEl ?? canvas.canvasEl ?? container;
-
-    btn.addEventListener('mousedown', (e: MouseEvent) => {
-      if (e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
-
-      const CARD_W = 300;
-      const CARD_H = 160;
-
-      let zoom = 1;
-      const _wRect = wrapperEl.getBoundingClientRect();
-      if (typeof canvas.getViewportBBox === 'function' && _wRect.width > 0) {
-        const _bb = canvas.getViewportBBox();
-        const _canvasW = _bb.maxX - _bb.minX;
-        if (_canvasW > 0) zoom = _wRect.width / _canvasW;
-      } else {
-        const _z = canvas.zoom;
-        if (typeof _z === 'number' && isFinite(_z) && _z > 0) zoom = _z;
-      }
-
-      const GHOST_W = CARD_W * zoom;
-      const GHOST_H = CARD_H * zoom;
-
-      const ghost = document.body.createDiv({ cls: 'ffc-canvas-drop-ghost' });
-      ghost.setAttribute('aria-hidden', 'true');
-      ghost.setCssProps({ '--ffc-ghost-w': `${GHOST_W}px`, '--ffc-ghost-h': `${GHOST_H}px` });
-
-      const startX   = e.clientX;
-      const startY   = e.clientY;
-      let   dragging = false;
-
-      const onMouseMove = (me: MouseEvent): void => {
-        const dx = me.clientX - startX;
-        const dy = me.clientY - startY;
-        if (!dragging && Math.sqrt(dx * dx + dy * dy) >= 5) {
-          dragging = true;
-          ghost.classList.add('is-visible');
-          btn.classList.add('is-dragging');
-        }
-        if (dragging) {
-          ghost.setCssProps({ '--ffc-ghost-x': `${me.clientX}px`, '--ffc-ghost-y': `${me.clientY}px` });
-        }
-      };
-
-      const onMouseUp = (ue: MouseEvent): void => {
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup',   onMouseUp);
-        ghost.remove();
-        btn.classList.remove('is-dragging');
-
-        if (!dragging) {
-          new CanvasNoteSwitcher(this.app, this, canvas, null).open();
-          return;
-        }
-
-        const rect = wrapperEl.getBoundingClientRect();
-        if (
-          ue.clientX < rect.left || ue.clientX > rect.right ||
-          ue.clientY < rect.top  || ue.clientY > rect.bottom
-        ) return;
-
-        let pos: { x: number; y: number };
-        const relX = ue.clientX - rect.left;
-        const relY = ue.clientY - rect.top;
-        if (typeof canvas.getViewportBBox === 'function') {
-          const bb = canvas.getViewportBBox();
-          pos = {
-            x: bb.minX + (relX / rect.width)  * (bb.maxX - bb.minX),
-            y: bb.minY + (relY / rect.height) * (bb.maxY - bb.minY),
-          };
-        } else {
-          const z = canvas.zoom ?? 1;
-          pos = {
-            x: (relX - (canvas.x ?? 0)) / z,
-            y: (relY - (canvas.y ?? 0)) / z,
-          };
-        }
-
-        new CanvasNoteSwitcher(this.app, this, canvas, pos).open();
-      };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup',   onMouseUp);
-    });
+    registerCanvasTools(this);
   }
 
   // ── Filtered Files Widget helpers ─────────────────────────────────────────────
@@ -420,9 +288,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
       name: cmd.name,
       callback: () => {
         const current = this.settings.commands.find((c) => c.id === cmd.id);
-        if (!current) { new Notice('Note Types: Command not found. Try reloading.'); return; }
+        if (!current) { new Notice('Note types: command not found. Try reloading.'); return; }
         const files = this.getFilteredFiles(current);
-        if (files.length === 0) { new Notice('Note Types: No files match the current filters.'); return; }
+        if (files.length === 0) { new Notice('Note types: no files match the current filters.'); return; }
         new FilteredFileModal(this.app, files).open();
       },
     });
@@ -518,19 +386,57 @@ export class FilteredFileCommandsPlugin extends Plugin {
     return added;
   }
 
-  async addRelation(source: TFile, target: TFile, rt: RelationType): Promise<void> {
+  /** Write the relation on both notes. Reports which sides it actually wrote, so a caller can undo exactly that. */
+  async addRelation(source: TFile, target: TFile, rt: RelationType): Promise<RelationSides> {
     const { forwardKey, reverseKey } = resolvedRelation(rt);
     if (!forwardKey) {
       new Notice('This relation type has no frontmatter key set.');
-      return;
+      return { forward: false, reverse: false };
     }
-    const wroteForward = await this.writeRelationLink(source, forwardKey, target);
-    const wroteReverse = await this.writeRelationLink(target, reverseKey, source);
+    const forward = await this.writeRelationLink(source, forwardKey, target);
+    const reverse = await this.writeRelationLink(target, reverseKey, source);
     new Notice(
-      wroteForward || wroteReverse
+      forward || reverse
         ? `Related: ${source.basename} → ${target.basename}`
         : 'Already related.',
     );
+    return { forward, reverse };
+  }
+
+  /** Remove `target` from `key` in `file`'s frontmatter. Returns true if a link was removed. */
+  private async removeRelationLink(file: TFile, key: string, target: TFile): Promise<boolean> {
+    let removed = false;
+    await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
+      if (!(key in fm)) return;
+      const entries = toEntryArray(fm[key]);
+      const kept = entries.filter((e) => !linkResolvesTo(this.app, e, file.path, target));
+      if (kept.length === entries.length) return;
+      removed = true;
+      const collapsed = collapseEntries(kept);
+      if (collapsed === undefined) delete fm[key];
+      else fm[key] = collapsed;
+    });
+    return removed;
+  }
+
+  /** Whether `file`'s frontmatter holds a link to `target` under `key`. */
+  hasRelationLink(file: TFile, key: string, target: TFile): boolean {
+    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+    return toEntryArray(fm?.[key]).some((e) => linkResolvesTo(this.app, e, file.path, target));
+  }
+
+  /** Write just the given sides of a relation (used to redo, or to undo a removal). */
+  async writeRelationSides(source: TFile, target: TFile, rt: RelationType, sides: RelationSides): Promise<void> {
+    const { forwardKey, reverseKey } = resolvedRelation(rt);
+    if (sides.forward) await this.writeRelationLink(source, forwardKey, target);
+    if (sides.reverse) await this.writeRelationLink(target, reverseKey, source);
+  }
+
+  /** Remove just the given sides of a relation, leaving any other link between the notes alone. */
+  async removeRelationSides(source: TFile, target: TFile, rt: RelationType, sides: RelationSides): Promise<void> {
+    const { forwardKey, reverseKey } = resolvedRelation(rt);
+    if (sides.forward) await this.removeRelationLink(source, forwardKey, target);
+    if (sides.reverse) await this.removeRelationLink(target, reverseKey, source);
   }
 
   /** Every relation entry in `file`'s frontmatter, across all relation types. */
@@ -591,8 +497,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
         if (!current) { new Notice('Note type not found. Try reloading.'); return; }
-        new NewNoteModal(this.app, current, (title, fieldValues, description) =>
-          this.createNote(current, title, fieldValues, description)
+        new NewNoteModal(this.app, current, async (title, fieldValues, description) => {
+          await this.createNote(current, title, fieldValues, description);
+        }
         ).open();
       },
     });
@@ -608,9 +515,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
       name: `Find ${noteType.name}`,
       callback: () => {
         const current = this.settings.noteTypes.find((o) => o.id === noteType.id);
-        if (!current) { new Notice('Note Types: Note type not found. Try reloading.'); return; }
+        if (!current) { new Notice('Note types: note type not found. Try reloading.'); return; }
         const files = this.getNoteTypeFiles(current);
-        if (files.length === 0) { new Notice('Note Types: No files match this note type.'); return; }
+        if (files.length === 0) { new Notice('Note types: no files match this note type.'); return; }
         new FilteredFileModal(this.app, files, current.name).open();
       },
     });
@@ -626,10 +533,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
    * there is nothing to unregister — only the stored hotkey map to update.
    */
   private migrateCommandHotkeys(oldSlug: string, newSlug: string): void {
-    /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-       hotkeyManager and its customKeys map aren't part of the public Obsidian API. */
     try {
-      const hkm    = (this.app as any).hotkeyManager;
+      const hkm    = hotkeyManager(this.app);
       const custom = hkm?.customKeys;
       if (!custom) return;
       let changed = false;
@@ -643,10 +548,8 @@ export class FilteredFileCommandsPlugin extends Plugin {
           changed = true;
         }
       }
-      if (changed) hkm.save();
+      if (changed) hkm.save?.();
     } catch { /* a private-API shape change here must not break loading */ }
-    /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call --
-       End of hotkeyManager reflection block. */
   }
 
   private registerNewNoteCommand(): void {
@@ -656,17 +559,19 @@ export class FilteredFileCommandsPlugin extends Plugin {
       callback: () => {
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new Notice('No note types defined. Add one in the Note Types settings.');
+          new Notice('No note types defined. Add one in the note types settings.');
           return;
         }
         if (types.length === 1) {
-          new NewNoteModal(this.app, types[0], (title, fv, desc) =>
-            this.createNote(types[0], title, fv, desc)
+          new NewNoteModal(this.app, types[0], async (title, fv, desc) => {
+            await this.createNote(types[0], title, fv, desc);
+          }
           ).open();
           return;
         }
-        new CombinedNewNoteModal(this.app, types, (noteType, title, fv, desc) =>
-          this.createNote(noteType, title, fv, desc)
+        new CombinedNewNoteModal(this.app, types, async (noteType, title, fv, desc) => {
+          await this.createNote(noteType, title, fv, desc);
+        }
         ).open();
       },
     });
@@ -677,7 +582,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       editorCallback: (editor) => {
         const types = this.settings.noteTypes;
         if (types.length === 0) {
-          new Notice('No note types defined. Add one in the Note Types settings.');
+          new Notice('No note types defined. Add one in the note types settings.');
           return;
         }
         const selection = editor.getSelection()?.trim() ?? '';
@@ -727,13 +632,13 @@ export class FilteredFileCommandsPlugin extends Plugin {
     title: string,
     fieldValues: Record<string, string> = {},
     description = '',
-  ): Promise<void> {
+  ): Promise<TFile | null> {
     const saveFolder = noteType.saveFolder?.trim() ?? '';
     const filePath   = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
 
     if (this.app.vault.getAbstractFileByPath(filePath)) {
       new Notice(`A file named "${title}" already exists at that location.`);
-      return;
+      return null;
     }
 
     let content = '';
@@ -772,8 +677,10 @@ export class FilteredFileCommandsPlugin extends Plugin {
         void this.app.workspace.getLeaf(false).openFile(newFile);
         notice.hide();
       });
+      return newFile;
     } catch (err) {
       new Notice(`Failed to create file: ${(err as Error).message}`);
+      return null;
     }
   }
 
@@ -871,12 +778,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
   private getTemplatesFolder(): string {
     if (this.settings.templatesFolder) return this.settings.templatesFolder;
     try {
-      /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return --
-         Core plugin internals (app.internalPlugins) aren't part of the public Obsidian API. */
-      const core = (this.app as any).internalPlugins?.plugins?.['templates'];
-      if (core?.enabled) return core.instance?.options?.folder ?? '';
-      /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return --
-         End of the internalPlugins reflection block. */
+      const core = corePlugins(this.app)?.plugins?.['templates'];
+      const options = (core?.instance as { options?: { folder?: string } } | undefined)?.options;
+      if (core?.enabled) return options?.folder ?? '';
     } catch { /* ignore */ }
     return '';
   }
@@ -931,7 +835,6 @@ export class FilteredFileCommandsPlugin extends Plugin {
       if (!obj.canvasFields)                     { obj.canvasFields = [];   needsSave = true; }
       if (!obj.imageKey)                         { obj.imageKey = '';       needsSave = true; }
       if (obj.showImageInPreview === undefined)  { obj.showImageInPreview = false; needsSave = true; }
-      if (obj.showImageInCanvas  === undefined)  { obj.showImageInCanvas  = false; needsSave = true; }
 
       if (!obj.commandSlug) {
         obj.commandSlug = uniqueCommandSlug(obj.name, takenSlugs);

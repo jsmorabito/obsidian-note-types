@@ -43,8 +43,8 @@ export class FilteredCommandSettingsModal extends Modal {
         .onChange(async (value) => { cmd.matchMode = value as 'all' | 'any'; await this.plugin.saveSettings(); })
       );
 
-    new Setting(contentEl).setName('File types').setDesc('Comma-separated extensions (e.g. md, canvas). Leave blank for Markdown only.')
-      .addText((text) => text.setPlaceholder('md, canvas').setValue(cmd.fileTypes || '')
+    new Setting(contentEl).setName('File types').setDesc('Comma-separated extensions, such as md and canvas. Leave blank for Markdown only.')
+      .addText((text) => text.setPlaceholder('Example: md, canvas').setValue(cmd.fileTypes || '')
         .onChange(async (value) => { cmd.fileTypes = value; await this.plugin.saveSettings(); })
       );
 

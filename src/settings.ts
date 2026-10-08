@@ -148,7 +148,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
         },
         onDelete: (index) => {
           if (s.relationTypes[index]?.builtin) {
-            new Notice('The built-in “Related to” relation can’t be removed.');
+            new Notice('The built-in relation can’t be removed.');
             this.update();
             return;
           }
@@ -234,7 +234,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
             desc: 'Show a frontmatter value instead of the filename in the widget (e.g. "title"). Leave blank to use the filename.',
             render: (setting) => {
               setting.addText((text) => text
-                .setPlaceholder('E.g. title')
+                .setPlaceholder('Example: title')
                 .setValue(s.ffwDisplayNameKey)
                 .onChange(async (value) => {
                   s.ffwDisplayNameKey = value.trim();

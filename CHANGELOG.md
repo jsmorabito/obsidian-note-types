@@ -5,6 +5,70 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0]
+
+### Added
+
+- **Canvas tools in the bottom menu.** Obsidian's own bottom card menu becomes one
+  bordered bar: Select, then Obsidian's draggable Card, Note and
+  Media buttons and a draggable Add note button, then Text, Group, Marker, Highlighter and
+  Eraser (`V`, `T`, `C`, `G`, `M`, `⇧M`, `E`, `N`; `Esc` cancels). The tools are controls
+  (like the ones on the right) with rounded hover states; the draggable buttons use
+  Obsidian's own lift animation, grab cursor and drag-to-place. Click Text or Group, then
+  click or drag on the canvas to place one. Free text has no card chrome and removes itself
+  if left empty. Everything is stored as standard JSON Canvas, with extra fields kept
+  alongside, so stock Obsidian still opens the files. The tools also work in a canvas
+  popped out into its own window.
+- **Note picker (`N`).** Add a typed note to the canvas, or create a new note
+  of a type and its card in one step. A note already on the canvas is selected
+  and zoomed to instead of being added twice.
+- **Note cards.** A canvas file node for a typed note shows as a card with an
+  optional key image and the title, tinted and outlined in the note type's
+  link color when its links are styled. A button in the selection toolbar
+  (or the **Cycle selected canvas note cards between card, embed and styled link**
+  command) switches between the card, Obsidian's full embed and a styled link.
+- **Relations on edges.** Connecting two note cards opens a menu of your
+  relation types in both directions, ordered by how often each is already used
+  between those note types. The relation is written to both notes' frontmatter.
+  Relation edges are styled and their labels locked, and the edge pop-up menu
+  gains **Make relation** and **Remove relation**.
+- **Context panel.** Select a note card to see its relations, grouped by
+  relation and direction. **+** brings a related note onto the canvas with a
+  labelled edge; **−** takes it off.
+- **Key image.** Add, replace or remove a note's key image from the selection
+  menu, or drop an image on its card. It is stored in the note type's image
+  property when one is set, otherwise at the top of the note.
+- **Ink.** Marker (`M`) and highlighter (`⇧M`) draw freehand strokes with
+  `perfect-freehand`, with a pen color row (none plus the six canvas presets).
+  Each stroke is one text node holding its stroke data in an extra field and an inline SVG
+  fallback, so it scales when resized and still shows in stock Obsidian. The
+  eraser (`E`) removes whole strokes; one swipe is one undo step. Touch and the
+  middle mouse button still pan.
+- **Layers panel.** A floating panel on the left lists groups and what they
+  contain. Click to select and zoom, Shift-click to add to the selection, hover
+  to outline, double-click a group to rename it. A search box (Enter jumps to
+  the first result, Esc clears) and a filter by kind of layer or note type narrow
+  the list, keeping the groups around each result. When collapsed it becomes a
+  core canvas control on the left.
+
+### Changed
+
+- **Undo covers the notes too.** Ctrl/Cmd+Z (and the canvas's undo button) now
+  also reverses what a relation, key image or new note did to your notes, and
+  redo puts it back. Making a relation takes out the frontmatter links it wrote
+  and a relation type created for it; removing one restores them; a key image
+  change restores the note's previous text; and undoing the card for a note
+  created from the picker moves that note to the trash (redo recreates it). Each
+  is only reverted while it is safe: a note edited since the change is left
+  alone, and a created note is kept if it has changed or anything else links to
+  it, with a notice either way. Saved image files are kept.
+
+### Removed
+
+- **Show cover image on canvas cards.** A card now shows a key image whenever
+  the note has one: the type's image property when set, otherwise the first
+  image in the note's first paragraph.
+
 ## [1.9.0]
 
 ### Added

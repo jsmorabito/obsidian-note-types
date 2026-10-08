@@ -39,7 +39,7 @@ export class NoteFieldModal extends Modal {
       .setName('Frontmatter key')
       .setDesc('Property key written into the new file.')
       .addText((text) => text
-        .setPlaceholder('E.g. status')
+        .setPlaceholder('Example: status')
         .setValue(field.key ?? '')
         .onChange(async (value) => { field.key = value.trim(); await this.plugin.saveSettings(); }));
 

@@ -252,7 +252,7 @@ export class NoteTypeSettingsPage extends SettingPage {
       }, 300, true);
 
       iconSetting.addText((text) => {
-        text.setPlaceholder('E.g. check-circle').setValue(obj.linkIcon ?? '')
+        text.setPlaceholder('Example: check-circle').setValue(obj.linkIcon ?? '')
           .onChange((value) => {
             obj.linkIcon = normalizeIconId(value) || undefined;
             const trimmed = obj.linkIcon?.trim();
@@ -424,7 +424,7 @@ export class NoteTypeSettingsPage extends SettingPage {
     // ── Canvas card fields ──────────────────────────────────────────────────
     new Setting(contentEl).setName('Canvas card fields').setHeading();
     contentEl.createEl('p', {
-      text: 'Frontmatter keys shown on canvas cards for notes of this type.',
+      text: 'Properties shown under the title on canvas cards for notes of this type. Empty values are skipped.',
       cls: 'ffc-hint',
     });
 
@@ -459,26 +459,18 @@ export class NoteTypeSettingsPage extends SettingPage {
       })
     );
 
-    new Setting(contentEl)
-      .setName('Show cover image on canvas cards')
-      .setDesc('When enabled, the image from the image key is embedded at the top of the canvas card.')
-      .addToggle((toggle) =>
-        toggle.setValue(obj.showImageInCanvas ?? false)
-          .onChange(async (value) => { obj.showImageInCanvas = value; await this.plugin.saveSettings(); })
-      );
-
     // ── Cover image ─────────────────────────────────────────────────────────
     new Setting(contentEl).setName('Cover image').setHeading();
     contentEl.createEl('p', {
-      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image").',
+      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). It is also where the canvas key image is stored, when set.',
       cls: 'ffc-hint',
     });
 
     new Setting(contentEl)
       .setName('Image frontmatter key')
-      .setDesc('E.g. cover, image, thumbnail')
+      .setDesc('Examples: cover, image, thumbnail')
       .addText((text) =>
-        text.setPlaceholder('cover')
+        text.setPlaceholder('Example: cover')
           .setValue(obj.imageKey ?? '')
           .onChange(async (value) => { obj.imageKey = value.trim(); await this.plugin.saveSettings(); })
       );

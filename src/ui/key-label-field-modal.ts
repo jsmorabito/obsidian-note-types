@@ -53,7 +53,7 @@ export class KeyLabelFieldModal extends Modal {
       .setName('Frontmatter key')
       .setDesc('Property key whose value is shown.')
       .addText((text) => text
-        .setPlaceholder('E.g. status')
+        .setPlaceholder('Example: status')
         .setValue(entry.key ?? '')
         .onChange(async (value) => {
           entry.key = value.trim();

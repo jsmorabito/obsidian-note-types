@@ -35,7 +35,7 @@ export class NoteTypeFilterModal extends Modal {
         .setName('Property key')
         .setDesc('Frontmatter property to test on each file.')
         .addText((text) => text
-          .setPlaceholder('E.g. type')
+          .setPlaceholder('Example: type')
           .setValue(filter.key ?? '')
           .onChange(async (value) => { filter.key = value.trim(); await this.plugin.saveSettings(); }));
     }
