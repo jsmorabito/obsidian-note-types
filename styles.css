@@ -89,11 +89,6 @@
 }
 
 
-/* ── Note-type sub-page ────────────────────────────────────────────────── */
-
-.ffc-item-page { max-width: 640px; }
-
-
 /* ── Modals ─────────────────────────────────────────────────────────────── */
 
 .ffc-item-modal { padding: 4px 8px 16px; max-width: 640px; }
@@ -1085,6 +1080,10 @@ svg.ffc-ink path.ffc-ink-auto {
   width: 100%;
   object-fit: cover;
   border-radius: var(--radius-s);
+}
+
+.ffc-note-card[data-ffc-image-fit="fit"] .ffc-note-card-img {
+  object-fit: contain;
 }
 
 /* Set while fitting a newly added card, so the image reports its full height. */

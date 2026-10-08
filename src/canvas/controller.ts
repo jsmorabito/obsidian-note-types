@@ -5,7 +5,7 @@ import { ContextPanel } from './context-panel.ts';
 import { attachUndoJournal } from './undo-journal.ts';
 import { LayersPanel } from './layers-panel.ts';
 import { CLICK_SLOP_PX, FIELD_KIND, INK_FALLBACK_HEX, SIZE_NOTE_CARD } from './constants.ts';
-import { clearNoteCards, decorateNoteCards, noteOfNode, setCardOwner, toggleViews } from './note-card.ts';
+import { clearNoteCards, decorateNoteCards, fitNodeToCard, noteOfNode, setCardOwner, toggleViews } from './note-card.ts';
 import { injectViewToggleButton } from './view-toggle.ts';
 import { NotePicker } from './note-picker.ts';
 import { RelationFlow } from './relation-flow.ts';
@@ -222,10 +222,35 @@ export class CanvasController {
     const node = this.cardAt(e);
     const canvas = this.view.canvas;
     const source = node && canvas ? imageFromDrop(e.dataTransfer) : null;
-    if (!node || !canvas || !source) return;
+    if (!node || !canvas || !source) {
+      if (type === 'drop') this.fitDroppedCards();
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     if (type === 'drop') void setKeyImage(this.plugin, canvas, node, source);
+  }
+
+  /**
+   * The canvas handles a drop itself (a note dragged in from the file explorer, say). Once it has
+   * added the nodes, fit any new note cards, the same as cards added from the note picker.
+   */
+  private fitDroppedCards(): void {
+    const canvas = this.view.canvas;
+    if (!canvas) return;
+    const before = new Set(canvas.nodes?.keys() ?? []);
+    const check = (tries: number): void => {
+      const added = [...(canvas.nodes?.values() ?? [])].filter((n) => n.id && !before.has(n.id));
+      if (added.length === 0) {
+        if (tries > 0) window.requestAnimationFrame(() => check(tries - 1));
+        return;
+      }
+      for (const node of added) {
+        const file = noteOfNode(node);
+        if (file && this.plugin.getNoteTypeForFile(file)) fitNodeToCard(this.plugin, canvas, node);
+      }
+    };
+    window.requestAnimationFrame(() => check(30));
   }
 
   private onPointer(type: 'pointerdown' | 'mousedown' | 'dblclick', e: PointerEvent): void {

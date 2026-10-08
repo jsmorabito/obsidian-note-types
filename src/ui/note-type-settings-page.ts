@@ -71,7 +71,6 @@ export class NoteTypeSettingsPage extends SettingPage {
     const prevScroll = scroller?.scrollTop ?? 0;
 
     contentEl.empty();
-    contentEl.addClass('ffc-item-page');
 
     const obj = this.plugin.settings.noteTypes[this.index];
     if (!obj) { contentEl.createEl('p', { text: 'Note type not found.' }); return; }
@@ -473,6 +472,15 @@ export class NoteTypeSettingsPage extends SettingPage {
         text.setPlaceholder('Example: cover')
           .setValue(obj.imageKey ?? '')
           .onChange(async (value) => { obj.imageKey = value.trim(); await this.plugin.saveSettings(); })
+      );
+
+    new Setting(contentEl)
+      .setName('Image on canvas cards')
+      .setDesc('When a card is too short for its image, fill crops the image to the card; fit shrinks it to show all of it.')
+      .addDropdown((dropdown) =>
+        dropdown.addOption('fill', 'Fill').addOption('fit', 'Fit')
+          .setValue(obj.canvasImageFit ?? 'fill')
+          .onChange(async (value) => { obj.canvasImageFit = value === 'fit' ? 'fit' : 'fill'; await this.plugin.saveSettings(); })
       );
 
     if (scroller && prevScroll) {

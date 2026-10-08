@@ -61,6 +61,8 @@ export interface NoteType {
   canvasFields: CanvasField[];
   imageKey?: string;
   showImageInPreview?: boolean;
+  /** How the key image sits on a canvas card too short for it: `fill` crops it (the default), `fit` shows it whole. */
+  canvasImageFit?: 'fit' | 'fill';
 }
 
 export interface RelationType {
