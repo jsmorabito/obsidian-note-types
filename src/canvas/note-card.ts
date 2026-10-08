@@ -9,6 +9,9 @@ import { readCardContent, renderCard, renderLinkPill, typeLinkColor } from './no
 const LEGACY_LABEL_CLASS = 'ffc-node-label';
 const CARD_CLASS   = 'ffc-note-card';
 const PILL_CLASS   = 'ffc-link-pill';
+const MEASURING_CLASS = 'ffc-measuring';
+/** How long a new card waits for its key image to load before sizing without it. */
+const IMAGE_WAIT_MS = 5000;
 
 /** Extension field on a file node: `"embed"` or `"link"`. Absent means card. */
 export const FIELD_VIEW = 'ffcView';
@@ -191,12 +194,19 @@ export function clearNoteCards(canvas: CanvasLike): void {
 }
 
 /**
- * Grow a card you've just added, once, so the rows of its configured
- * properties aren't clipped by the default height. Not an undo step: undoing
- * the add removes the whole card. Existing cards are never resized.
+ * Grow a card you've just added, once, so its key image shows whole and the rows
+ * of its configured properties aren't clipped by the default height. Not an undo
+ * step: undoing the add removes the whole card. Existing cards are never resized.
  */
 export function fitNodeToCard(plugin: FilteredFileCommandsPlugin, canvas: CanvasLike, node: CanvasNodeLike): void {
+  const added = nodeBox(node);
+  // Give up on an image that hasn't loaded by then, and size for what is there.
+  const deadline = Date.now() + IMAGE_WAIT_MS;
   const attempt = (tries: number): void => {
+    // Removed (the add undone), shown another way, or resized by hand since: leave it alone.
+    const box = nodeBox(node);
+    if (!node.id || canvas.nodes?.get(node.id) !== node || viewOf(node) !== 'card') return;
+    if (!box || !added || box.width !== added.width || box.height !== added.height) return;
     // The card is drawn by the next decoration pass; run it now instead of waiting for the timer.
     decorateNoteCards(plugin, canvas);
     const card = node.nodeEl?.querySelector<HTMLElement>(`.${CARD_CLASS}`);
@@ -204,9 +214,21 @@ export function fitNodeToCard(plugin: FilteredFileCommandsPlugin, canvas: Canvas
       if (tries > 0) window.requestAnimationFrame(() => attempt(tries - 1));
       return;
     }
+    const img = card.querySelector<HTMLImageElement>('.ffc-note-card-img');
+    const wait = deadline - Date.now();
+    if (img && !img.complete && wait > 0) {
+      // Its height is unknown until it loads. Start over then, as a re-render may have swapped the image.
+      const retry = (): void => { window.clearTimeout(timer); attempt(tries); };
+      const timer = window.setTimeout(retry, wait);
+      img.addEventListener('load', retry, { once: true });
+      img.addEventListener('error', retry, { once: true });
+      return;
+    }
+    // The image shrinks to fit a short card instead of overflowing it, so let it take its full height while measuring.
+    card.addClass(MEASURING_CLASS);
     const extra = card.scrollHeight - card.clientHeight;
-    const box = nodeBox(node);
-    if (extra <= 0 || !box) return;
+    card.removeClass(MEASURING_CLASS);
+    if (extra <= 0) return;
     node.moveAndResize?.({ ...box, height: box.height + extra });
     canvas.requestSave?.(false);
   };

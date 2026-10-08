@@ -1087,6 +1087,11 @@ svg.ffc-ink path.ffc-ink-auto {
   border-radius: var(--radius-s);
 }
 
+/* Set while fitting a newly added card, so the image reports its full height. */
+.ffc-note-card.ffc-measuring .ffc-note-card-img {
+  flex-shrink: 0;
+}
+
 .ffc-note-card-title {
   flex: none;
   display: -webkit-box;
