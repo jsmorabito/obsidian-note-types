@@ -30,7 +30,10 @@ Enable *Preview fields* on a type and hovering a styled wikilink shows a popup c
 Right-click a note that belongs to a note type and choose **Mark as… → `<relation>` → `<note type>`** to pick another note and link the two. The link is written into both notes' frontmatter — under the relation's key on the note you marked, and under its reverse key on the target. A generic **Related to** relation is built in (symmetric, key `related_to`); define your own (e.g. *Blocks* / *Blocked by*) under *Settings → Note Types → Relations*. **Unmark…** on the same menu lists a note's existing relations and removes one from both sides.
 
 **Canvas**  
-Open a canvas and Obsidian's bottom menu becomes one bar: Select, then its own draggable Card, Note and Media buttons and a draggable **Add note** (`N`) button, then Text (`T`), Group (`G`), Marker (`M`), Highlighter (`⇧M`) and Eraser (`E`). Typed notes appear as cards showing an optional key image, the title and any properties you list under **Canvas card fields** for that note type, and can be switched, with a button in the selection toolbar, to a full embed or to a styled link, the same pill the editor shows. Connect two cards to choose a relation, which is written to both notes' frontmatter; select a card to see its relations in a side panel; drop an image on a card to set its key image. A layers panel on the left lists groups and what they contain, with a search box and a filter by kind of layer or note type. Undo and redo cover the note changes that relations and key images make, not only the canvas. Canvas files stay standard JSON Canvas, so stock Obsidian still opens them. This relies on Obsidian's undocumented canvas internals, collected in `src/canvas/adapter.ts` and last checked against Obsidian 1.14.4, and may need a patch after an Obsidian update.
+Canvas features (note cards, relations on edges, key images, ink and layers) live in the separate [Canvas Plus](https://github.com/jsmorabito/obsidian-canvas-plus) plugin, which reads your note types and relations from this one. The **Canvas card fields** and **Image on canvas cards** settings on each note type apply there.
+
+**API for other plugins**  
+Other plugins can read note types and relations, and write relations, through `app.plugins.getPlugin('filtered-file-commands').api`. See `src/api.ts` for what it offers.
 
 **Filtered file commands**  
 Create arbitrary command-palette commands that open a fuzzy picker showing only files whose frontmatter matches your filters (AND / OR, with `equals`, `not_equals`, `contains`, `exists` operators). Optionally restrict to specific file extensions (e.g. `md, canvas`).
@@ -66,7 +69,7 @@ Open *Settings → Note Types* to configure:
 
 The plugin has no telemetry and collects no data. Its only request of its own is **Fetch page title from URL** (off by default, see Settings above): one request to the linked page when you create a note from a highlighted URL.
 
-The plugin never downloads images. But if a note's image is a web address (the property named by **Image frontmatter key**, or the first image in the note), Obsidian loads it from that address whenever the plugin shows it, on a hover preview card or a canvas note card. That is a request from your device to the image's host, the same as for any image embedded from the web. Dropping an image link onto a canvas note card only writes the link into the note, and downloads nothing. Dropping an image file saves a copy in your vault's attachment folder, as Obsidian does for any attachment.
+The plugin never downloads images. But if a note's image is a web address (the property named by **Image frontmatter key**, or the first image in the note), Obsidian loads it from that address whenever the plugin shows it, on a hover preview card. That is a request from your device to the image's host, the same as for any image embedded from the web.
 
 ---
 

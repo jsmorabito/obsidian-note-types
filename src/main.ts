@@ -16,7 +16,7 @@ import { NewNoteModal } from './ui/new-note-modal.ts';
 import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
 import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
-import { registerCanvasTools } from './canvas/index.ts';
+import { createApi, NoteTypesApi, RelationRef } from './api.ts';
 import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
@@ -24,21 +24,6 @@ import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
 type CommandRef = { name: string };
-
-/** One relation entry found in a note's frontmatter (see listRelationsForFile). */
-type RelationRef = {
-  /** Frontmatter key on the note this relation was read from. */
-  ownKey: string;
-  /** Frontmatter key on the other note (for removing the back-link). */
-  otherKey: string;
-  /** Human label for the menu, e.g. "Related to" or "Blocked by". */
-  label: string;
-  direction: 'forward' | 'reverse';
-  /** The raw link text, stripped of `[[ ]]` / alias. */
-  linktext: string;
-  /** Resolved target file, or null if the link is unresolved. */
-  targetFile: TFile | null;
-};
 
 export class FilteredFileCommandsPlugin extends Plugin {
   settings!: PluginSettings;
@@ -56,6 +41,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
   statusNoteMap:        Map<string, string> = new Map();
 
   private previewPopup!: NotePreviewPopup;
+
+  /** Read by other plugins (such as Canvas Plus); see api.ts. */
+  readonly api: NoteTypesApi = createApi(this);
 
   // ── Trigger provider registry ─────────────────────────────────────────────────
 
@@ -238,7 +226,6 @@ export class FilteredFileCommandsPlugin extends Plugin {
       })
     );
 
-    registerCanvasTools(this);
   }
 
   // ── Filtered Files Widget helpers ─────────────────────────────────────────────

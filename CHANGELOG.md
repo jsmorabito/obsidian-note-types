@@ -5,6 +5,21 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0]
+
+### Changed
+
+- **Canvas features moved to Canvas Plus.** The canvas tools, note cards,
+  relations on edges, key images, ink and layers panel are now a separate
+  plugin, Canvas Plus. Install it to keep them; your canvas files are unchanged.
+  The **Canvas card fields** and **Image on canvas cards** settings stay here.
+
+### Added
+
+- **API for other plugins** (`plugin.api`, see `src/api.ts`): note types, the
+  note type of a file, note creation, relation types and relation reads and
+  writes.
+
 ## [1.11.0]
 
 ### Added
