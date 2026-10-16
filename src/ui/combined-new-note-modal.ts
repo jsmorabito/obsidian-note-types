@@ -13,6 +13,9 @@ export class CombinedNewNoteModal extends Modal {
   private urlSelection: string;
   private titlePromise: Promise<string | null> | null;
   private titleTouched = false;
+  private submitted = false;
+  /** Called when the modal closes without creating anything. */
+  onDismiss: (() => void) | null = null;
 
   constructor(
     app: App,
@@ -108,11 +111,16 @@ export class CombinedNewNoteModal extends Modal {
   }
 
   private submit(): void {
+    if (this.submitted) return;
     const title = this.titleValue.trim();
     if (!title) { new Notice('Please enter a title.'); return; }
+    this.submitted = true;
     this.close();
     void this.onSubmit(this.selectedType, title, this.fieldValues, this.descriptionValue);
   }
 
-  onClose(): void { this.contentEl.empty(); }
+  onClose(): void {
+    this.contentEl.empty();
+    if (!this.submitted) this.onDismiss?.();
+  }
 }

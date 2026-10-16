@@ -9,10 +9,12 @@
 // Treat it as a stable contract: add members freely, but bump `version` and keep
 // the old members working when changing what one does.
 
-import type { TFile } from 'obsidian';
+import { Notice, type TFile } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from './main.ts';
 import type { NoteType, RelationType } from './types.ts';
 import { RelationSides, resolvedRelation } from './relations.ts';
+import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
+import { sanitizeNoteTitle } from './utils/helpers.ts';
 
 export const NOTE_TYPES_API_VERSION = 1;
 
@@ -45,6 +47,8 @@ export interface NoteTypesApi {
   getNoteTypeFiles(type: NoteType): TFile[];
   /** Create a note of `type` from its template. Null when it already exists or creation failed (a notice says why). */
   createNote(type: NoteType, title: string, fieldValues?: Record<string, string>, description?: string): Promise<TFile | null>;
+  /** Open the "New note" modal (type, title, fields, description). Resolves to the created note, or null if dismissed or creation failed. */
+  openNewNoteModal(initialTitle?: string): Promise<TFile | null>;
 
   /** The configured relation types. Live objects: read them, don't edit them. */
   getRelationTypes(): readonly RelationType[];
@@ -80,6 +84,24 @@ export function createApi(plugin: FilteredFileCommandsPlugin): NoteTypesApi {
     getNoteTypeForFile: (file) => plugin.getNoteTypeForFile(file),
     getNoteTypeFiles: (type) => plugin.getNoteTypeFiles(type),
     createNote: (type, title, fieldValues, description) => plugin.createNote(type, title, fieldValues, description),
+    openNewNoteModal: (initialTitle = '') => new Promise<TFile | null>((resolve) => {
+      const types = plugin.settings.noteTypes;
+      if (types.length === 0) {
+        new Notice('No note types defined. Add one in the note types settings.');
+        resolve(null);
+        return;
+      }
+      const modal = new CombinedNewNoteModal(plugin.app, types, async (type, title, fv, desc) => {
+        try {
+          resolve(await plugin.createNote(type, title, fv, desc));
+        } catch (err) {
+          new Notice(`Could not create note: ${(err as Error).message}`);
+          resolve(null);
+        }
+      }, sanitizeNoteTitle(initialTitle));
+      modal.onDismiss = () => resolve(null);
+      modal.open();
+    }),
 
     getRelationTypes: () => plugin.settings.relationTypes,
     resolveRelation: (rt) => resolvedRelation(rt),
