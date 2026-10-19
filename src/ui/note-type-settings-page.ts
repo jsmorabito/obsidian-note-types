@@ -1,7 +1,7 @@
-import { debounce, getIcon, Setting, SettingPage } from 'obsidian';
+import { debounce, getIcon, Notice, Setting, SettingPage } from 'obsidian';
 import type { ExtraButtonComponent } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
-import type { CanvasField, FilterSpec, NoteField, PreviewField } from '../types.ts';
+import type { FilterSpec, NoteField } from '../types.ts';
 import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
@@ -106,11 +106,11 @@ export class NoteTypeSettingsPage extends SettingPage {
       );
 
     // ── Note detection ───────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Note detection').setHeading();
-    contentEl.createEl('p', {
-      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
-      cls: 'ffc-hint',
-    });
+    const onAddNoteDetectionFilters = () => this.addItem(obj.matchFilters ??= [], { key: '', operator: 'equals' as const, value: '' },
+      (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open());
+    addHeadingWithInfo(contentEl, 'Note detection filters',
+      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
+      { label: 'Add detection filter', onClick: onAddNoteDetectionFilters });
 
     new Setting(contentEl)
       .setName('Filter match mode')
@@ -137,16 +137,6 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.display();
           }));
     }
-    new Setting(contentEl).addButton((btn) =>
-      btn.setButtonText('Add detection filter').onClick(async () => {
-        if (!obj.matchFilters) obj.matchFilters = [];
-        const filter: FilterSpec = { key: '', operator: 'equals', value: '' };
-        obj.matchFilters.push(filter);
-        await this.plugin.saveSettings();
-        this.display();
-        new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open();
-      })
-    );
 
     new Setting(contentEl)
       .setName('Show in trigger menu')
@@ -319,11 +309,11 @@ export class NoteTypeSettingsPage extends SettingPage {
       );
 
     // ── Creation fields ─────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Creation fields').setHeading();
-    contentEl.createEl('p', {
-      text: "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
-      cls: 'ffc-hint',
-    });
+    const onAddNoteCreationFields = () => this.addItem(obj.fields ??= [], { key: '', label: '', type: 'text' as const },
+      (item) => new NoteFieldModal(this.plugin.app, this.plugin, item, () => this.display()).open());
+    addHeadingWithInfo(contentEl, 'Note creation fields',
+      "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
+      { label: 'Add field', onClick: onAddNoteCreationFields });
 
     for (let fi = 0; fi < (obj.fields ?? []).length; fi++) {
       const field = obj.fields[fi];
@@ -339,16 +329,6 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.display();
           }));
     }
-    new Setting(contentEl).addButton((btn) =>
-      btn.setButtonText('Add field').onClick(async () => {
-        if (!obj.fields) obj.fields = [];
-        const field: NoteField = { key: '', label: '', type: 'text' };
-        obj.fields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open();
-      })
-    );
 
     const urlFieldOptions = (obj.fields ?? []).filter((f) => f.key?.trim());
     new Setting(contentEl)
@@ -371,11 +351,15 @@ export class NoteTypeSettingsPage extends SettingPage {
       });
 
     // ── Preview fields ──────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Preview fields').setHeading();
-    contentEl.createEl('p', {
-      text: 'Frontmatter keys shown when hovering over a link to a note of this type.',
-      cls: 'ffc-hint',
-    });
+    const onAddLinkHoverPreviewFields = () => this.addItem(obj.previewFields ??= [], { key: '', label: '' },
+      (item) => new KeyLabelFieldModal(this.plugin.app, this.plugin, item, {
+        heading: 'Preview field',
+        afterChange: () => { this.plugin.buildStyledNoteSet(); this.plugin.refreshNoteLinkStyles(); },
+        onDismiss: () => this.display(),
+      }).open());
+    addHeadingWithInfo(contentEl, 'Link hover preview fields',
+      'Frontmatter keys shown when hovering over a link to a note of this type.',
+      { label: 'Add preview field', onClick: onAddLinkHoverPreviewFields });
 
     for (let fi = 0; fi < (obj.previewFields ?? []).length; fi++) {
       const field = obj.previewFields[fi];
@@ -397,20 +381,6 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.display();
           }));
     }
-    new Setting(contentEl).addButton((btn) =>
-      btn.setButtonText('Add preview field').onClick(async () => {
-        if (!obj.previewFields) obj.previewFields = [];
-        const field: PreviewField = { key: '', label: '' };
-        obj.previewFields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
-          heading: 'Preview field',
-          afterChange: () => { this.plugin.buildStyledNoteSet(); this.plugin.refreshNoteLinkStyles(); },
-          onDismiss: () => this.display(),
-        }).open();
-      })
-    );
 
     new Setting(contentEl)
       .setName('Show cover image in preview')
@@ -421,11 +391,14 @@ export class NoteTypeSettingsPage extends SettingPage {
       );
 
     // ── Canvas card fields ──────────────────────────────────────────────────
-    new Setting(contentEl).setName('Canvas card fields').setHeading();
-    contentEl.createEl('p', {
-      text: 'Properties shown under the title on canvas cards for notes of this type. Empty values are skipped.',
-      cls: 'ffc-hint',
-    });
+    const onAddCanvasCardFields = () => this.addItem(obj.canvasFields ??= [], { key: '', label: '' },
+      (item) => new KeyLabelFieldModal(this.plugin.app, this.plugin, item, {
+        heading: 'Canvas card field',
+        onDismiss: () => this.display(),
+      }).open());
+    addHeadingWithInfo(contentEl, 'Canvas card fields',
+      'Properties shown under the title on canvas cards for notes of this type. Empty values are skipped.',
+      { label: 'Add canvas field', onClick: onAddCanvasCardFields });
 
     for (let fi = 0; fi < (obj.canvasFields ?? []).length; fi++) {
       const field = obj.canvasFields[fi];
@@ -444,26 +417,10 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.display();
           }));
     }
-    new Setting(contentEl).addButton((btn) =>
-      btn.setButtonText('Add canvas field').onClick(async () => {
-        if (!obj.canvasFields) obj.canvasFields = [];
-        const field: CanvasField = { key: '', label: '' };
-        obj.canvasFields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
-          heading: 'Canvas card field',
-          onDismiss: () => this.display(),
-        }).open();
-      })
-    );
 
     // ── Cover image ─────────────────────────────────────────────────────────
-    new Setting(contentEl).setName('Cover image').setHeading();
-    contentEl.createEl('p', {
-      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). It is also where the canvas key image is stored, when set.',
-      cls: 'ffc-hint',
-    });
+    addHeadingWithInfo(contentEl, 'Cover image',
+      'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). It is also where the canvas key image is stored, when set.');
 
     new Setting(contentEl)
       .setName('Image frontmatter key')
@@ -531,4 +488,31 @@ export class NoteTypeSettingsPage extends SettingPage {
     }
     return null;
   }
+
+  private async addItem<T>(list: T[], item: T, openModal: (item: T) => void): Promise<void> {
+    list.push(item);
+    await this.plugin.saveSettings();
+    this.display();
+    openModal(item);
+  }
+}
+
+/** Adds a section heading with an optional add button and an info button (tooltip `info`) on the right. */
+function addHeadingWithInfo(
+  containerEl: HTMLElement,
+  title: string,
+  info: string,
+  add?: { label: string; onClick: () => Promise<void> },
+): void {
+  const setting = new Setting(containerEl).setName(title).setHeading();
+  if (add) {
+    setting.addExtraButton((btn) => btn.setIcon('plus').setTooltip(add.label).onClick(() => {
+      add.onClick().catch((err) => {
+        console.error(err);
+        new Notice(`Could not ${add.label.toLowerCase()}.`);
+      });
+    }));
+  }
+  // Tooltips need hover, so tapping the icon shows the same text as a notice (touch devices).
+  setting.addExtraButton((btn) => btn.setIcon('info').setTooltip(info).onClick(() => { new Notice(info, 8000); }));
 }

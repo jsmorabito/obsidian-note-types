@@ -271,11 +271,20 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         (_a2 = this.onDataChange) == null ? void 0 : _a2.call(this);
       })
     );
-    new import_obsidian5.Setting(contentEl).setName("Note detection").setHeading();
-    contentEl.createEl("p", {
-      text: 'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
-      cls: "ffc-hint"
-    });
+    const onAddNoteDetectionFilters = () => {
+      var _a2;
+      return this.addItem(
+        (_a2 = obj.matchFilters) != null ? _a2 : obj.matchFilters = [],
+        { key: "", operator: "equals", value: "" },
+        (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open()
+      );
+    };
+    addHeadingWithInfo(
+      contentEl,
+      "Note detection filters",
+      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
+      { label: "Add detection filter", onClick: onAddNoteDetectionFilters }
+    );
     new import_obsidian5.Setting(contentEl).setName("Filter match mode").setDesc("Should a file match all filters (and) or at least one filter (or)?").addDropdown(
       (dd) => {
         var _a2;
@@ -296,17 +305,6 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         this.display();
       }));
     }
-    new import_obsidian5.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("Add detection filter").onClick(async () => {
-        if (!obj.matchFilters)
-          obj.matchFilters = [];
-        const filter = { key: "", operator: "equals", value: "" };
-        obj.matchFilters.push(filter);
-        await this.plugin.saveSettings();
-        this.display();
-        new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open();
-      })
-    );
     new import_obsidian5.Setting(contentEl).setName("Show in trigger menu").setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || "@"}" inline trigger menu.`).addToggle(
       (toggle) => {
         var _a2;
@@ -465,11 +463,20 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian5.Setting(contentEl).setName("Creation fields").setHeading();
-    contentEl.createEl("p", {
-      text: "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
-      cls: "ffc-hint"
-    });
+    const onAddNoteCreationFields = () => {
+      var _a2;
+      return this.addItem(
+        (_a2 = obj.fields) != null ? _a2 : obj.fields = [],
+        { key: "", label: "", type: "text" },
+        (item) => new NoteFieldModal(this.plugin.app, this.plugin, item, () => this.display()).open()
+      );
+    };
+    addHeadingWithInfo(
+      contentEl,
+      "Note creation fields",
+      "Fields shown in the creation dialog. Values are written into the new file's frontmatter.",
+      { label: "Add field", onClick: onAddNoteCreationFields }
+    );
     for (let fi = 0; fi < ((_c = obj.fields) != null ? _c : []).length; fi++) {
       const field = obj.fields[fi];
       new import_obsidian5.Setting(contentEl).setName(((_d = field.label) == null ? void 0 : _d.trim()) || ((_e = field.key) == null ? void 0 : _e.trim()) || "Unnamed field").setDesc(this._fieldDesc(field)).addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit field").onClick(() => new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove field").onClick(async () => {
@@ -478,17 +485,6 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         this.display();
       }));
     }
-    new import_obsidian5.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("Add field").onClick(async () => {
-        if (!obj.fields)
-          obj.fields = [];
-        const field = { key: "", label: "", type: "text" };
-        obj.fields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new NoteFieldModal(this.plugin.app, this.plugin, field, () => this.display()).open();
-      })
-    );
     const urlFieldOptions = ((_f = obj.fields) != null ? _f : []).filter((f) => {
       var _a2;
       return (_a2 = f.key) == null ? void 0 : _a2.trim();
@@ -508,11 +504,27 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian5.Setting(contentEl).setName("Preview fields").setHeading();
-    contentEl.createEl("p", {
-      text: "Frontmatter keys shown when hovering over a link to a note of this type.",
-      cls: "ffc-hint"
-    });
+    const onAddLinkHoverPreviewFields = () => {
+      var _a2;
+      return this.addItem(
+        (_a2 = obj.previewFields) != null ? _a2 : obj.previewFields = [],
+        { key: "", label: "" },
+        (item) => new KeyLabelFieldModal(this.plugin.app, this.plugin, item, {
+          heading: "Preview field",
+          afterChange: () => {
+            this.plugin.buildStyledNoteSet();
+            this.plugin.refreshNoteLinkStyles();
+          },
+          onDismiss: () => this.display()
+        }).open()
+      );
+    };
+    addHeadingWithInfo(
+      contentEl,
+      "Link hover preview fields",
+      "Frontmatter keys shown when hovering over a link to a note of this type.",
+      { label: "Add preview field", onClick: onAddLinkHoverPreviewFields }
+    );
     for (let fi = 0; fi < ((_g = obj.previewFields) != null ? _g : []).length; fi++) {
       const field = obj.previewFields[fi];
       new import_obsidian5.Setting(contentEl).setName(((_h = field.label) == null ? void 0 : _h.trim()) || ((_i = field.key) == null ? void 0 : _i.trim()) || "Unnamed key").setDesc(((_j = field.key) == null ? void 0 : _j.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
@@ -530,24 +542,6 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         this.display();
       }));
     }
-    new import_obsidian5.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("Add preview field").onClick(async () => {
-        if (!obj.previewFields)
-          obj.previewFields = [];
-        const field = { key: "", label: "" };
-        obj.previewFields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
-          heading: "Preview field",
-          afterChange: () => {
-            this.plugin.buildStyledNoteSet();
-            this.plugin.refreshNoteLinkStyles();
-          },
-          onDismiss: () => this.display()
-        }).open();
-      })
-    );
     new import_obsidian5.Setting(contentEl).setName("Show cover image in preview").setDesc("When enabled, the image from the image key is shown at the top of the hover card.").addToggle(
       (toggle) => {
         var _a2;
@@ -557,11 +551,23 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         });
       }
     );
-    new import_obsidian5.Setting(contentEl).setName("Canvas card fields").setHeading();
-    contentEl.createEl("p", {
-      text: "Properties shown under the title on canvas cards for notes of this type. Empty values are skipped.",
-      cls: "ffc-hint"
-    });
+    const onAddCanvasCardFields = () => {
+      var _a2;
+      return this.addItem(
+        (_a2 = obj.canvasFields) != null ? _a2 : obj.canvasFields = [],
+        { key: "", label: "" },
+        (item) => new KeyLabelFieldModal(this.plugin.app, this.plugin, item, {
+          heading: "Canvas card field",
+          onDismiss: () => this.display()
+        }).open()
+      );
+    };
+    addHeadingWithInfo(
+      contentEl,
+      "Canvas card fields",
+      "Properties shown under the title on canvas cards for notes of this type. Empty values are skipped.",
+      { label: "Add canvas field", onClick: onAddCanvasCardFields }
+    );
     for (let fi = 0; fi < ((_k = obj.canvasFields) != null ? _k : []).length; fi++) {
       const field = obj.canvasFields[fi];
       new import_obsidian5.Setting(contentEl).setName(((_l = field.label) == null ? void 0 : _l.trim()) || ((_m = field.key) == null ? void 0 : _m.trim()) || "Unnamed key").setDesc(((_n = field.key) == null ? void 0 : _n.trim()) ? `key: ${field.key}` : "no key set").addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit key").onClick(() => new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
@@ -573,25 +579,11 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
         this.display();
       }));
     }
-    new import_obsidian5.Setting(contentEl).addButton(
-      (btn) => btn.setButtonText("Add canvas field").onClick(async () => {
-        if (!obj.canvasFields)
-          obj.canvasFields = [];
-        const field = { key: "", label: "" };
-        obj.canvasFields.push(field);
-        await this.plugin.saveSettings();
-        this.display();
-        new KeyLabelFieldModal(this.plugin.app, this.plugin, field, {
-          heading: "Canvas card field",
-          onDismiss: () => this.display()
-        }).open();
-      })
+    addHeadingWithInfo(
+      contentEl,
+      "Cover image",
+      'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). It is also where the canvas key image is stored, when set.'
     );
-    new import_obsidian5.Setting(contentEl).setName("Cover image").setHeading();
-    contentEl.createEl("p", {
-      text: 'The frontmatter key whose value is an image path or wikilink (e.g. "cover" or "image"). It is also where the canvas key image is stored, when set.',
-      cls: "ffc-hint"
-    });
     new import_obsidian5.Setting(contentEl).setName("Image frontmatter key").setDesc("Examples: cover, image, thumbnail").addText(
       (text) => {
         var _a2;
@@ -659,7 +651,27 @@ var NoteTypeSettingsPage = class extends import_obsidian5.SettingPage {
     }
     return null;
   }
+  async addItem(list, item, openModal) {
+    list.push(item);
+    await this.plugin.saveSettings();
+    this.display();
+    openModal(item);
+  }
 };
+function addHeadingWithInfo(containerEl, title, info, add) {
+  const setting = new import_obsidian5.Setting(containerEl).setName(title).setHeading();
+  if (add) {
+    setting.addExtraButton((btn) => btn.setIcon("plus").setTooltip(add.label).onClick(() => {
+      add.onClick().catch((err) => {
+        console.error(err);
+        new import_obsidian5.Notice(`Could not ${add.label.toLowerCase()}.`);
+      });
+    }));
+  }
+  setting.addExtraButton((btn) => btn.setIcon("info").setTooltip(info).onClick(() => {
+    new import_obsidian5.Notice(info, 8e3);
+  }));
+}
 
 // src/ui/note-type-delete-modal.ts
 var import_obsidian6 = require("obsidian");

@@ -5,6 +5,21 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.1]
+
+### Changed
+
+- **Settings headings.** Renamed **Note detection** to **Note detection
+  filters**, **Creation fields** to **Note creation fields** and **Preview
+  fields** to **Link hover preview fields**. The description under each section
+  heading is now an info icon on the right that shows it on hover. The
+  **Add** buttons for filters and fields are now plus icons in the same row.
+
+### Added
+
+- **Release workflow.** Tagged releases are built in GitHub Actions with
+  artifact attestations for the release assets.
+
 ## [1.13.0]
 
 ### Added
