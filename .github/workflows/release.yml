@@ -32,7 +32,7 @@ jobs:
             exit 1
           fi
 
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run build
 
       - name: Attest release assets
