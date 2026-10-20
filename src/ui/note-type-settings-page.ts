@@ -1,6 +1,7 @@
 import { debounce, getIcon, Notice, Setting, SettingPage } from 'obsidian';
 import type { ExtraButtonComponent } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
+import { addSaveLocationSettings } from './save-location-setting.ts';
 import type { FilterSpec, NoteField } from '../types.ts';
 import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
@@ -303,10 +304,7 @@ export class NoteTypeSettingsPage extends SettingPage {
         );
     }
 
-    new Setting(contentEl).setName('Save folder').setDesc('Where new files are created (e.g. "projects/tasks"). Leave blank for vault root.')
-      .addText((text) => text.setPlaceholder('E.g. Projects/tasks').setValue(obj.saveFolder || '')
-        .onChange(async (value) => { obj.saveFolder = value.trim(); await this.plugin.saveSettings(); })
-      );
+    addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
 
     // ── Creation fields ─────────────────────────────────────────────────────
     const onAddNoteCreationFields = () => this.addItem(obj.fields ??= [], { key: '', label: '', type: 'text' as const },

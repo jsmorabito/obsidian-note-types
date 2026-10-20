@@ -2,13 +2,13 @@ import { App, Notice, PluginSettingTab } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from './main.ts';
 import { PluginSettings } from './types.ts';
+import { buildNoteType } from './utils/note-type-factory.ts';
 import { NoteTypeSettingsPage } from './ui/note-type-settings-page.ts';
 import { NoteTypeDeleteModal } from './ui/note-type-delete-modal.ts';
 import { FilteredCommandSettingsModal } from './ui/filtered-command-settings-modal.ts';
 import { FilteredCommandDeleteModal } from './ui/filtered-command-delete-modal.ts';
 import { RelationTypeModal } from './ui/relation-type-modal.ts';
 import { defaultRelationType, resolvedRelation } from './relations.ts';
-import { uniqueCommandSlug } from './utils/helpers.ts';
 
 export const DEFAULT_SETTINGS: PluginSettings = {
   commands: [],
@@ -279,17 +279,7 @@ export class MyPluginSettingTab extends PluginSettingTab {
   }
 
   private async addNoteType(): Promise<void> {
-    const s = this.plugin.settings;
-    const id         = `ffc-notetype-${Date.now()}`;
-    const takenSlugs = new Set(s.noteTypes.map((o) => o.commandSlug).filter(Boolean));
-    const newSlug    = uniqueCommandSlug('New Note', takenSlugs);
-    s.noteTypes.push({
-      id, commandSlug: newSlug, name: 'New Note', templatePath: '', saveFolder: '',
-      fields: [], matchFilters: [], matchMode: 'all', enableFindCommand: false,
-      showInTriggerMenu: false, previewFields: [], canvasFields: [],
-    });
-    await this.plugin.saveSettings();
-    this.plugin.registerNoteTypeCommand(s.noteTypes[s.noteTypes.length - 1]);
+    await this.plugin.addNoteType(buildNoteType('New Note', this.plugin.settings.noteTypes));
     this.update();
   }
 

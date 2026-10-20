@@ -13,6 +13,8 @@ import { prependIconSpan } from './utils/icon-mask.ts';
 import { FFW_VIEW_TYPE } from './utils/ffw-utils.ts';
 import { FilteredFileModal } from './ui/filtered-file-modal.ts';
 import { NewNoteModal } from './ui/new-note-modal.ts';
+import { buildNoteType, effectiveSaveLocation } from './utils/note-type-factory.ts';
+import { CreateNoteTypeModal } from './ui/create-note-type-modal.ts';
 import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
 import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
@@ -308,7 +310,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       const results = filters.map((f) => this.evaluateFilter(fm, f, file));
       return matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
     }
-    if (noteType.saveFolder?.trim()) {
+    if (noteType.saveFolder?.trim() && effectiveSaveLocation(noteType) === 'folder') {
       const prefix = noteType.saveFolder.trim().replace(/\/$/, '') + '/';
       return file.path.startsWith(prefix);
     }
@@ -564,6 +566,20 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: 'ffc-create-note-type',
+      name: 'Create note type',
+      callback: () => {
+        new CreateNoteTypeModal(this.app, this, async (values) => {
+          const noteType = buildNoteType(values.name, this.settings.noteTypes, {
+            ...values, description: values.description || undefined,
+          });
+          await this.addNoteType(noteType);
+          new Notice(`Created note type "${noteType.name}".`);
+        }).open();
+      },
+    });
+
+    this.addCommand({
       id: 'ffc-new-note-from-selection',
       name: 'New note from selection',
       editorCallback: (editor) => {
@@ -614,13 +630,36 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
   // ── File creation ─────────────────────────────────────────────────────────────
 
+  /** Persist a new note type and register its command; rolls back if saving fails. */
+  async addNoteType(noteType: NoteType): Promise<void> {
+    this.settings.noteTypes.push(noteType);
+    try {
+      await this.saveSettings();
+    } catch (err) {
+      this.settings.noteTypes.pop();
+      throw err;
+    }
+    this.registerNoteTypeCommand(noteType);
+  }
+
+  /** Folder a new note of this type goes in, following the type's save location. */
+  private resolveSaveFolder(noteType: NoteType): string {
+    const folder = noteType.saveFolder?.trim().replace(/\/$/, '') ?? '';
+    const location = effectiveSaveLocation(noteType);
+    if (location === 'current') {
+      const parent = this.app.workspace.getActiveFile()?.parent;
+      return parent && !parent.isRoot() ? parent.path : '';
+    }
+    return location === 'folder' ? folder : '';
+  }
+
   async createNote(
     noteType: NoteType,
     title: string,
     fieldValues: Record<string, string> = {},
     description = '',
   ): Promise<TFile | null> {
-    const saveFolder = noteType.saveFolder?.trim() ?? '';
+    const saveFolder = this.resolveSaveFolder(noteType);
     const filePath   = saveFolder ? `${saveFolder}/${title}.md` : `${title}.md`;
 
     if (this.app.vault.getAbstractFileByPath(filePath)) {

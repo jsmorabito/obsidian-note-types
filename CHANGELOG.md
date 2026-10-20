@@ -5,6 +5,23 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.2]
+
+### Added
+
+- **Create note type command.** A compact dialog, styled like Obsidian's Add
+  bookmark window, for creating a note type with a name, description,
+  template, save location and detection filters.
+- **Save location options.** Note types can now be created in the vault
+  folder, the same folder as the current file, or a specific folder (with
+  folder suggestions), matching Obsidian's **Default location for new
+  notes** setting.
+
+### Changed
+
+- **Template picker.** The create dialog lists the files in your templates
+  folder instead of asking for a path.
+
 ## [1.13.1]
 
 ### Changed

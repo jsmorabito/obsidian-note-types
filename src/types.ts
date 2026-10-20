@@ -29,6 +29,12 @@ export interface NoteType {
   description?: string;
   templatePath: string;
   saveFolder: string;
+  /**
+   * Where new notes of this type are created: the vault root, the folder of the
+   * active file, or `saveFolder`. Undefined means `folder` when `saveFolder` is
+   * set and `vault` otherwise (the behaviour before this option existed).
+   */
+  saveLocation?: 'vault' | 'current' | 'folder';
   fields: NoteField[];
   /**
    * Key of the creation field that receives a highlighted URL when a note of
