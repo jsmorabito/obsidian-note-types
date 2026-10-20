@@ -13,7 +13,6 @@ import { Notice, type TFile } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from './main.ts';
 import type { NoteType, RelationType } from './types.ts';
 import { RelationSides, resolvedRelation } from './relations.ts';
-import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
 import { sanitizeNoteTitle } from './utils/helpers.ts';
 
 export const NOTE_TYPES_API_VERSION = 1;
@@ -85,22 +84,14 @@ export function createApi(plugin: FilteredFileCommandsPlugin): NoteTypesApi {
     getNoteTypeFiles: (type) => plugin.getNoteTypeFiles(type),
     createNote: (type, title, fieldValues, description) => plugin.createNote(type, title, fieldValues, description),
     openNewNoteModal: (initialTitle = '') => new Promise<TFile | null>((resolve) => {
-      const types = plugin.settings.noteTypes;
-      if (types.length === 0) {
-        new Notice('No note types defined. Add one in the note types settings.');
-        resolve(null);
-        return;
-      }
-      const modal = new CombinedNewNoteModal(plugin.app, types, async (type, title, fv, desc) => {
+      plugin.openNewNoteModal(async (type, title, fv, desc) => {
         try {
           resolve(await plugin.createNote(type, title, fv, desc));
         } catch (err) {
           new Notice(`Could not create note: ${(err as Error).message}`);
           resolve(null);
         }
-      }, sanitizeNoteTitle(initialTitle));
-      modal.onDismiss = () => resolve(null);
-      modal.open();
+      }, sanitizeNoteTitle(initialTitle), '', null, () => resolve(null));
     }),
 
     getRelationTypes: () => plugin.settings.relationTypes,

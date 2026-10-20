@@ -16,6 +16,13 @@ export class CombinedNewNoteModal extends Modal {
   private submitted = false;
   /** Called when the modal closes without creating anything. */
   onDismiss: (() => void) | null = null;
+  /**
+   * When set, the Type row shows a plus button. It hands over a `done` callback
+   * to call once the user finishes (or cancels) creating a type; this modal then
+   * reopens with its entered values intact.
+   */
+  onAddType: ((done: (created: NoteType | null) => void) => void) | null = null;
+  private switching = false;
 
   constructor(
     app: App,
@@ -52,18 +59,23 @@ export class CombinedNewNoteModal extends Modal {
 
     let descSettingEl: HTMLElement | null = null;
 
-    new Setting(contentEl)
-      .setName('Type')
-      .addDropdown((dd) => {
-        for (const obj of this.noteTypes) dd.addOption(obj.id, obj.name);
-        dd.setValue(this.selectedType.id);
-        dd.onChange((id) => {
-          this.selectedType = this.noteTypes.find((o) => o.id === id) ?? this.noteTypes[0];
-          this.fieldValues  = {};
-          this.applyUrlPrefill();
-          renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
-        });
+    const typeSetting = new Setting(contentEl).setName('Type');
+    if (this.onAddType) {
+      typeSetting.addExtraButton((btn) => btn
+        .setIcon('plus')
+        .setTooltip('Add note type')
+        .onClick(() => this.addType()));
+    }
+    typeSetting.addDropdown((dd) => {
+      for (const obj of this.noteTypes) dd.addOption(obj.id, obj.name);
+      dd.setValue(this.selectedType.id);
+      dd.onChange((id) => {
+        this.selectedType = this.noteTypes.find((o) => o.id === id) ?? this.noteTypes[0];
+        this.fieldValues  = {};
+        this.applyUrlPrefill();
+        renderFieldInputs(contentEl, this.app, this.selectedType, this.fieldValues, () => this.submit(), descSettingEl);
       });
+    });
 
     new Setting(contentEl)
       .setName('Title')
@@ -96,6 +108,7 @@ export class CombinedNewNoteModal extends Modal {
       .setDesc('Added to the body of the created page')
       .addTextArea((ta) => {
         ta.setPlaceholder('Optional description…')
+          .setValue(this.descriptionValue)
           .onChange((v) => { this.descriptionValue = v; });
         ta.inputEl.addEventListener('keydown', (e) => {
           if (e.key === 'Escape') this.close();
@@ -110,6 +123,21 @@ export class CombinedNewNoteModal extends Modal {
       .addButton((btn) => btn.setButtonText('Cancel').onClick(() => this.close()));
   }
 
+  private addType(): void {
+    this.initialTitle = this.titleValue;
+    this.switching = true;
+    this.close();
+    this.onAddType?.((created) => {
+      this.switching = false;
+      if (created) {
+        this.selectedType = created;
+        this.fieldValues  = {};
+        this.applyUrlPrefill();
+      }
+      this.open();
+    });
+  }
+
   private submit(): void {
     if (this.submitted) return;
     const title = this.titleValue.trim();
@@ -121,6 +149,6 @@ export class CombinedNewNoteModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
-    if (!this.submitted) this.onDismiss?.();
+    if (!this.submitted && !this.switching) this.onDismiss?.();
   }
 }

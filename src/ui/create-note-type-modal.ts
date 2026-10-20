@@ -12,6 +12,9 @@ export type NewNoteTypeValues = Pick<NoteType, 'name' | 'description' | 'templat
 export class CreateNoteTypeModal extends Modal {
   private values: NewNoteTypeValues = { name: '', description: '', templatePath: '', saveFolder: '', saveLocation: 'vault', matchFilters: [], matchMode: 'all' };
   private filtersEl!: HTMLElement;
+  private saved = false;
+  /** Called once the modal has closed, with whether a note type was saved. */
+  onClosed: ((saved: boolean) => void) | null = null;
 
   constructor(app: App, private plugin: FilteredFileCommandsPlugin, private onSubmit: (values: NewNoteTypeValues) => Promise<void> | void) {
     super(app);
@@ -123,6 +126,7 @@ export class CreateNoteTypeModal extends Modal {
     if (this.values.saveLocation !== 'folder') this.values.saveFolder = '';
     try {
       await this.onSubmit(this.values);
+      this.saved = true;
       this.close();
     } catch (err) {
       console.error('Create note type failed:', err);
@@ -132,5 +136,6 @@ export class CreateNoteTypeModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
+    this.onClosed?.(this.saved);
   }
 }

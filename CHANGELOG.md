@@ -5,6 +5,20 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.1]
+
+### Added
+
+- **Add note type button.** The New note dialog has a plus button beside the
+  **Type** dropdown that opens Create note type and returns you to New note
+  with the new type selected. Your title and description are kept.
+
+### Changed
+
+- **New note always uses the combined dialog**, even with a single note type,
+  so the add button is available. With no note types, it opens Create note
+  type first.
+
 ## [1.14.0]
 
 ### Added

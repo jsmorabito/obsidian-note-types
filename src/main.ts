@@ -545,49 +545,21 @@ export class FilteredFileCommandsPlugin extends Plugin {
     this.addCommand({
       id: 'ffc-new-note',
       name: 'New note',
-      callback: () => {
-        const types = this.settings.noteTypes;
-        if (types.length === 0) {
-          new Notice('No note types defined. Add one in the note types settings.');
-          return;
-        }
-        if (types.length === 1) {
-          new NewNoteModal(this.app, types[0], async (title, fv, desc) => {
-            await this.createNote(types[0], title, fv, desc);
-          }
-          ).open();
-          return;
-        }
-        new CombinedNewNoteModal(this.app, types, async (noteType, title, fv, desc) => {
-          await this.createNote(noteType, title, fv, desc);
-        }
-        ).open();
-      },
+      callback: () => this.openNewNoteModal(async (noteType, title, fv, desc) => {
+        await this.createNote(noteType, title, fv, desc);
+      }),
     });
 
     this.addCommand({
       id: 'ffc-create-note-type',
       name: 'Create note type',
-      callback: () => {
-        new CreateNoteTypeModal(this.app, this, async (values) => {
-          const noteType = buildNoteType(values.name, this.settings.noteTypes, {
-            ...values, description: values.description || undefined,
-          });
-          await this.addNoteType(noteType);
-          new Notice(`Created note type "${noteType.name}".`);
-        }).open();
-      },
+      callback: () => this.openCreateNoteTypeModal(),
     });
 
     this.addCommand({
       id: 'ffc-new-note-from-selection',
       name: 'New note from selection',
       editorCallback: (editor) => {
-        const types = this.settings.noteTypes;
-        if (types.length === 0) {
-          new Notice('No note types defined. Add one in the note types settings.');
-          return;
-        }
         const selection = editor.getSelection()?.trim() ?? '';
         const selectionIsUrl = selection !== '' && isUrl(selection);
         const from = editor.getCursor('from');
@@ -598,23 +570,16 @@ export class FilteredFileCommandsPlugin extends Plugin {
         // Routing is decided against the first (default-selected) type; the
         // combined modal re-routes if the user switches to a type with its own
         // URL field.
-        const routeToField = selectionIsUrl && !!types[0].urlFieldKey;
+        const routeToField = selectionIsUrl && !!this.settings.noteTypes[0]?.urlFieldKey;
         const initialTitle = routeToField ? '' : selection;
         const urlSelection = selectionIsUrl ? selection : '';
         const titlePromise = selectionIsUrl && this.settings.fetchUrlTitles
           ? fetchPageTitle(selection)
           : null;
-        if (types.length === 1) {
-          new NewNoteModal(this.app, types[0], async (title, fv, desc) => {
-            await replaceWithLink(title);
-            await this.createNote(types[0], title, fv, desc);
-          }, initialTitle, urlSelection, titlePromise).open();
-          return;
-        }
-        new CombinedNewNoteModal(this.app, types, async (noteType, title, fv, desc) => {
+        this.openNewNoteModal(async (noteType, title, fv, desc) => {
           await replaceWithLink(title);
           await this.createNote(noteType, title, fv, desc);
-        }, initialTitle, urlSelection, titlePromise).open();
+        }, initialTitle, urlSelection, titlePromise);
       },
     });
 
@@ -629,6 +594,46 @@ export class FilteredFileCommandsPlugin extends Plugin {
   }
 
   // ── File creation ─────────────────────────────────────────────────────────────
+
+  /** Open the Create note type dialog; `done` receives the new type, or null if dismissed. */
+  openCreateNoteTypeModal(done?: (created: NoteType | null) => void): void {
+    let created: NoteType | null = null;
+    const modal = new CreateNoteTypeModal(this.app, this, async (values) => {
+      const noteType = buildNoteType(values.name, this.settings.noteTypes, {
+        ...values, description: values.description || undefined,
+      });
+      await this.addNoteType(noteType);
+      created = noteType;
+      new Notice(`Created note type "${noteType.name}".`);
+    });
+    modal.onClosed = () => done?.(created);
+    modal.open();
+  }
+
+  /**
+   * Open the New note dialog with an add-type button. With no note types yet,
+   * it first asks the user to create one.
+   */
+  openNewNoteModal(
+    onSubmit: (noteType: NoteType, title: string, fieldValues: Record<string, string>, description: string) => void | Promise<void>,
+    initialTitle = '',
+    urlSelection = '',
+    titlePromise: Promise<string | null> | null = null,
+    onDismiss?: () => void,
+  ): void {
+    const types = this.settings.noteTypes;
+    if (types.length === 0) {
+      this.openCreateNoteTypeModal((created) => {
+        if (created) this.openNewNoteModal(onSubmit, initialTitle, urlSelection, titlePromise, onDismiss);
+        else onDismiss?.();
+      });
+      return;
+    }
+    const modal = new CombinedNewNoteModal(this.app, types, onSubmit, initialTitle, urlSelection, titlePromise);
+    modal.onAddType = (done) => this.openCreateNoteTypeModal(done);
+    if (onDismiss) modal.onDismiss = onDismiss;
+    modal.open();
+  }
 
   /** Persist a new note type and register its command; rolls back if saving fails. */
   async addNoteType(noteType: NoteType): Promise<void> {
