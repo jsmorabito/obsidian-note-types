@@ -829,6 +829,18 @@
   outline-offset: 0;
 }
 
+/* Finished links deepen their fill on hover. The pending pill sits under the
+   pointer while you type, so that would flicker as it grows: hold the base fill. */
+.cm-editor .ffc-inline-pill.ffc-note-link:hover {
+  background: var(--tag-background);
+  color: var(--tag-color) !important;
+}
+
+.cm-editor .ffc-inline-pill.ffc-note-link[style*="--ffc-note-link-color"]:hover {
+  background: color-mix(in srgb, var(--ffc-note-link-color) 15%, transparent);
+  color: var(--ffc-note-link-color) !important;
+}
+
 /* A type without an icon shows its name in front of the title instead. */
 .cm-editor .ffc-inline-pill:not([style*="--ffc-note-link-icon"])[data-ffc-type-name]::before {
   content: attr(data-ffc-type-name) " ";

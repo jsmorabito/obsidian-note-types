@@ -5,6 +5,14 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1]
+
+### Fixed
+
+- **Inline note pill flickered under the pointer.** While you typed in
+  **Create typed note inline**, the pill's fill switched between two shades as
+  the pointer moved in and out of hover. It now keeps one fill.
+
 ## [1.15.0]
 
 ### Added
