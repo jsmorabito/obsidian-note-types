@@ -2,7 +2,7 @@ import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate } from '@
 import { RangeSetBuilder, StateEffect } from '@codemirror/state';
 import { editorInfoField, getIcon } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
-import { iconMaskUrl, prependIconSpan, statusIconDataUrl } from '../utils/icon-mask.ts';
+import { noteLinkStyleParts, prependIconSpan, statusIconDataUrl } from '../utils/icon-mask.ts';
 import { statusSvg } from '../utils/status-svg.ts';
 
 /** The file this editor is actually showing, for link-resolution purposes. */
@@ -127,7 +127,6 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
           if (isStyled || isPreview || statusUrl) {
             const { color, icon: rawIconId } = isStyled ? ffcPlugin.noteLinkStyle(target, sourcePath) : {};
             const iconId  = !cursorOnLink ? rawIconId : undefined;
-            const iconUrl = iconId ? iconMaskUrl(iconId) : null;
 
             // A status-only link (showStatusInLinks on, styledLinks off)
             // gets no 'ffc-note-link' class; its icon is styled off the bare
@@ -143,9 +142,7 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
             ];
             const cls = clsParts.filter(Boolean).join(' ');
 
-            const styleParts: string[] = [];
-            if (color)     styleParts.push(`--ffc-note-link-color: ${color}`);
-            if (iconUrl)   styleParts.push(`--ffc-note-link-icon: ${iconUrl}`);
+            const styleParts = noteLinkStyleParts(color, iconId);
             if (statusUrl) styleParts.push(`--ffc-note-link-status-icon: ${statusUrl}`);
 
             const spec: Parameters<typeof Decoration.mark>[0] = {

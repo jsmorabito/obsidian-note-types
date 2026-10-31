@@ -20,6 +20,9 @@ If the selection is a bare URL and the note type has a **Field for highlighted U
 **Inline trigger**  
 Set a single trigger character (e.g. `@`) in settings. Typing it in the editor opens a quick picker for any note type that has *Show in trigger menu* enabled.
 
+**Create typed note inline**  
+Run **Create typed note inline** from the slash menu (add it under *Settings → Slash commands*) or the command palette. Pick a note type, then type a title; the type and title appear as a dashed pill styled like a finished link. Press Enter to create the note and swap the pill for a link to it, or Esc to cancel. Note types with creation fields open the New note dialog first.
+
 **Styled wikilinks**  
 Enable *Style note links* on a note type to apply a CSS class (`ffc-note-link`) to every `[[wikilink]]` pointing at a file of that type — in both the editor and reading view. The underline is dropped and a pill background is applied. Set an optional **Link color** to tint those links: the text takes the color and the pill background becomes a translucent wash of it. Leave the color unset to follow the theme's tag colors, or pair with a CSS snippet for finer control.
 

@@ -22,6 +22,7 @@ import { createApi, NoteTypesApi, RelationRef } from './api.ts';
 import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
+import { buildInlineTypedNote, startInlineTypedNote } from './views/inline-typed-note.ts';
 import type { TriggerProvider } from './trigger-registry.ts';
 
 // Command reference type returned by addCommand
@@ -131,6 +132,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
     });
 
     this.registerEditorExtension(buildNoteLinkViewPlugin(this));
+    this.registerEditorExtension(buildInlineTypedNote(this));
 
     this.registerEvent(
       this.app.metadataCache.on('resolved', () => {
@@ -554,6 +556,12 @@ export class FilteredFileCommandsPlugin extends Plugin {
       id: 'ffc-create-note-type',
       name: 'Create note type',
       callback: () => this.openCreateNoteTypeModal(),
+    });
+
+    this.addCommand({
+      id: 'ffc-create-typed-note-inline',
+      name: 'Create typed note inline',
+      editorCallback: (editor) => { startInlineTypedNote(this, editor); },
     });
 
     this.addCommand({

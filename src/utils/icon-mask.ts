@@ -46,6 +46,25 @@ export function iconMaskUrl(iconId: string): string | null {
   return cachedDataUrl(iconCache, iconId, () => getIcon(iconId));
 }
 
+/** A CSS colour as a user would type it; anything that could escape a declaration is refused. */
+const SAFE_CSS_COLOR = /^[#a-z0-9(),.%\s/-]+$/i;
+
+/**
+ * The custom properties a styled link carries on its `style` attribute: its
+ * colour and type icon. Shared by finished links (the CM6 view plugin) and the
+ * inline note pill so both read the same CSS.
+ */
+export function noteLinkStyleParts(color?: string, iconId?: string): string[] {
+  const parts: string[] = [];
+  const safeColor = color?.trim();
+  if (safeColor && SAFE_CSS_COLOR.test(safeColor) && !/url\(/i.test(safeColor)) {
+    parts.push(`--ffc-note-link-color: ${safeColor}`);
+  }
+  const iconUrl = iconId ? iconMaskUrl(iconId) : null;
+  if (iconUrl) parts.push(`--ffc-note-link-icon: ${iconUrl}`);
+  return parts;
+}
+
 const statusCache = new Map<string, string>();
 
 /**

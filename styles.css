@@ -818,3 +818,55 @@
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* Create typed note inline: the in-progress pill reuses the .ffc-note-link look. */
+.cm-editor .ffc-inline-pill {
+  cursor: text;
+  /* Not created yet: a dashed outline. It goes
+     away once the line becomes a real link. */
+  --ffc-pending-color: var(--ffc-note-link-color, var(--text-muted));
+  outline: 1px dashed color-mix(in srgb, var(--ffc-pending-color) 55%, transparent);
+  outline-offset: 0;
+}
+
+/* A type without an icon shows its name in front of the title instead. */
+.cm-editor .ffc-inline-pill:not([style*="--ffc-note-link-icon"])[data-ffc-type-name]::before {
+  content: attr(data-ffc-type-name) " ";
+  pointer-events: none;
+}
+
+.ffc-inline-query {
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-hover);
+}
+
+.ffc-inline-popup {
+  position: fixed;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.ffc-inline-popup-hidden {
+  visibility: hidden;
+}
+
+.ffc-inline-popup-item {
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+.ffc-inline-popup-icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.ffc-inline-popup-icon .svg-icon {
+  width: var(--icon-s);
+  height: var(--icon-s);
+}
+
+.ffc-inline-popup-empty {
+  color: var(--text-muted);
+}
