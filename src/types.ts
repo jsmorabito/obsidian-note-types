@@ -46,6 +46,13 @@ export interface NoteType {
   matchMode: 'all' | 'any';
   enableFindCommand: boolean;
   showInTriggerMenu: boolean;
+  /**
+   * Optional tag (no leading `#`) that marks a line as a candidate note of this
+   * type. The tag is recoloured with `linkColor` in the editor, and the icon shown
+   * on hover opens the New note dialog to create the note and replace the line
+   * with a link to it.
+   */
+  tag?: string;
   styledLinks?: boolean;
   /**
    * Optional CSS colour (any valid CSS colour string, typically a hex value)

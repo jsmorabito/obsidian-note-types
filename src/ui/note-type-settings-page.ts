@@ -7,6 +7,7 @@ import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
 import { IconInputSuggest } from './icon-suggest.ts';
+import { noteTagError, normalizeNoteTag } from '../views/note-tag-view-plugin.ts';
 
 /**
  * Resolves whatever the user typed to a valid Lucide icon id. Accepts both the
@@ -158,6 +159,30 @@ export class NoteTypeSettingsPage extends SettingPage {
             if (value) this.plugin.registerFindCommand(obj);
           })
       );
+
+    new Setting(contentEl)
+      .setName('Note tag')
+      .setDesc('A tag that marks a line as a note of this type, without the #. Select the icon that appears when you hover the tag to create the note from that line. The tag takes the link color when one is set.')
+      .addText((text) => {
+        text.setPlaceholder(`${obj.commandSlug || 'tag'}`).setValue(obj.tag ?? '')
+          .onChange(async (value) => {
+            const error = noteTagError(value);
+            text.inputEl.toggleClass('mod-error', !!error);
+            text.inputEl.title = error ?? '';
+            if (error) return;
+            const tag = normalizeNoteTag(value);
+            const clash = this.plugin.settings.noteTypes.find(
+              (t) => t !== obj && t.tag && normalizeNoteTag(t.tag).toLowerCase() === tag.toLowerCase());
+            if (tag && clash) {
+              text.inputEl.addClass('mod-error');
+              text.inputEl.title = `"${clash.name}" already uses this tag.`;
+              return;
+            }
+            obj.tag = tag || undefined;
+            await this.plugin.saveSettings();
+            this.plugin.refreshNoteLinkStyles();
+          });
+      });
 
     new Setting(contentEl)
       .setName('Style note links')

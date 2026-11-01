@@ -5,6 +5,16 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0]
+
+### Added
+
+- **Note tag.** Give a note type its own tag in its settings (for example
+  `question`). In the editor the tag takes the type's link color and shows a
+  file-plus icon on hover. Selecting the icon opens the **New note** dialog on
+  that type with the line as the title, then replaces the line with a link to
+  the new note. The idea comes from the Discourse Graph plugin.
+
 ## [1.15.1]
 
 ### Fixed

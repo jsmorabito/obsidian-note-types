@@ -31,10 +31,11 @@ export class CombinedNewNoteModal extends Modal {
     initialTitle = '',
     urlSelection = '',
     titlePromise: Promise<string | null> | null = null,
+    initialType?: NoteType,
   ) {
     super(app);
     this.noteTypes    = noteTypes;
-    this.selectedType = noteTypes[0];
+    this.selectedType = initialType && noteTypes.includes(initialType) ? initialType : noteTypes[0];
     this.onSubmit     = onSubmit;
     this.initialTitle = initialTitle;
     this.urlSelection = urlSelection;

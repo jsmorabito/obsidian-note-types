@@ -22,6 +22,7 @@ import { createApi, NoteTypesApi, RelationRef } from './api.ts';
 import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
+import { buildNoteTagViewPlugin } from './views/note-tag-view-plugin.ts';
 import { buildInlineTypedNote, startInlineTypedNote } from './views/inline-typed-note.ts';
 import type { TriggerProvider } from './trigger-registry.ts';
 
@@ -133,6 +134,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
     this.registerEditorExtension(buildNoteLinkViewPlugin(this));
     this.registerEditorExtension(buildInlineTypedNote(this));
+    this.registerEditorExtension(buildNoteTagViewPlugin(this));
 
     this.registerEvent(
       this.app.metadataCache.on('resolved', () => {
@@ -628,16 +630,17 @@ export class FilteredFileCommandsPlugin extends Plugin {
     urlSelection = '',
     titlePromise: Promise<string | null> | null = null,
     onDismiss?: () => void,
+    initialType?: NoteType,
   ): void {
     const types = this.settings.noteTypes;
     if (types.length === 0) {
       this.openCreateNoteTypeModal((created) => {
-        if (created) this.openNewNoteModal(onSubmit, initialTitle, urlSelection, titlePromise, onDismiss);
+        if (created) this.openNewNoteModal(onSubmit, initialTitle, urlSelection, titlePromise, onDismiss, initialType);
         else onDismiss?.();
       });
       return;
     }
-    const modal = new CombinedNewNoteModal(this.app, types, onSubmit, initialTitle, urlSelection, titlePromise);
+    const modal = new CombinedNewNoteModal(this.app, types, onSubmit, initialTitle, urlSelection, titlePromise, initialType);
     modal.onAddType = (done) => this.openCreateNoteTypeModal(done);
     if (onDismiss) modal.onDismiss = onDismiss;
     modal.open();

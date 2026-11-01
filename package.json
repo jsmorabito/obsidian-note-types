@@ -1,6 +1,6 @@
 {
   "name": "obsidian-objects",
-  "version": "1.15.1",
+  "version": "1.16.0",
   "description": "Define custom note types with creation commands, filtered file pickers, hover previews, and a sidebar widget.",
   "main": "main.js",
   "scripts": {
@@ -12,6 +12,7 @@
   "author": "John Morabito",
   "license": "MIT",
   "devDependencies": {
+    "@codemirror/language": "^6.13.1",
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
     "@eslint/js": "^10.0.1",
