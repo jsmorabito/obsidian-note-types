@@ -784,6 +784,20 @@
   top: 1px;
 }
 
+/* Source mode link icons: widget placed before the opening [[ so the icon
+   doesn't repeat when CM6 splits the mark at syntax-token boundaries. */
+.ffc-source-link-icons {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -1px;
+  pointer-events: none;
+}
+
+.ffc-source-link-icons .ffc-status-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* ── Note type settings — link icon picker ──────────────────────────────── */
 
 .ffc-icon-preview {
