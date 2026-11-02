@@ -5,6 +5,13 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.1]
+
+### Changed
+
+- **Note tag icon.** The icon that appears when you hover a note tag is now the
+  file-input icon.
+
 ## [1.16.0]
 
 ### Added

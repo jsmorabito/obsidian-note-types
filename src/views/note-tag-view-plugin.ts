@@ -12,7 +12,7 @@ import { refreshNoteLinkStylesEffect } from './note-link-view-plugin.ts';
 const TAG_CLASS = 'ffc-note-tag';
 const TYPE_ATTR = 'data-ffc-note-tag-type';
 const TAG_SEGMENT_PREFIX = 'tag-';
-const ADD_ICON = 'lucide-file-plus';
+const ADD_ICON = 'lucide-file-input';
 
 const LIST_PREFIX = /^(\s*)(\d+[.)]\s+|[-*+]\s+(?:\[[ xX]\]\s+)?)/;
 const BLOCK_MARKER = /^\s*(?:#{1,6}\s+|>\s*)/;

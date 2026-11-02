@@ -844,7 +844,7 @@
   cursor: pointer;
 }
 
-/* A file-plus icon grows in after the tag on hover: clicking it opens the New note dialog. */
+/* A file-input icon grows in after the tag on hover: clicking it opens the New note dialog. */
 .cm-hashtag-end > .ffc-note-tag[style*="--ffc-note-tag-icon"]::after {
   content: "";
   display: inline-block;
