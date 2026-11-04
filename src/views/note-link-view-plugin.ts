@@ -1,6 +1,6 @@
-import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate } from '@codemirror/view';
+import { ViewPlugin, Decoration, DecorationSet, EditorView, ViewUpdate, WidgetType } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect } from '@codemirror/state';
-import { editorInfoField, getIcon } from 'obsidian';
+import { editorInfoField, editorLivePreviewField, getIcon } from 'obsidian';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import { noteLinkStyleParts, prependIconSpan, statusIconDataUrl } from '../utils/icon-mask.ts';
 import { statusSvg } from '../utils/status-svg.ts';
@@ -17,6 +17,40 @@ function sourcePathOf(view: EditorView): string {
  * caret is currently inside keeps its stale decoration until the next edit.
  */
 export const refreshNoteLinkStylesEffect = StateEffect.define<null>();
+
+/** Source mode splits marks at syntax tokens; a single widget cannot repeat. */
+class SourceLinkIcons extends WidgetType {
+  private iconEl: SVGElement | null;
+  private statusEl: SVGElement | null;
+
+  constructor(private iconId?: string, private status?: string, private color?: string) {
+    super();
+    // Resolve at construction so eq() can tell when an icon starts/stops
+    // resolving (e.g. while an icon-pack plugin is still registering). Without
+    // this, a transient miss would leave an icon-less widget DOM cached forever.
+    this.iconEl = iconId ? getIcon(iconId) : null;
+    this.statusEl = status ? statusSvg(status) : null;
+  }
+
+  eq(other: SourceLinkIcons): boolean {
+    return this.iconId === other.iconId &&
+      this.status === other.status &&
+      this.color === other.color &&
+      !!this.iconEl === !!other.iconEl &&
+      !!this.statusEl === !!other.statusEl;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const el = view.dom.ownerDocument.adoptNode(createSpan({ cls: 'ffc-source-link-icons' }));
+    el.setAttribute('aria-hidden', 'true');
+    el.style.color = this.color || 'var(--tag-color)';
+    if (this.iconEl) prependIconSpan(el, this.iconEl, 'ffc-link-icon');
+    if (this.statusEl) prependIconSpan(el, this.statusEl);
+    return el;
+  }
+
+  ignoreEvent(): boolean { return true; }
+}
 
 /**
  * Scans the CM6 document for wikilinks whose targets are detected notes with
@@ -44,7 +78,9 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
       update(update: ViewUpdate): void {
         const forced = update.transactions.some((tr) =>
           tr.effects.some((e) => e.is(refreshNoteLinkStylesEffect)));
-        if (forced || update.docChanged || update.viewportChanged || update.selectionSet) {
+        const modeChanged = update.startState.field(editorLivePreviewField, false) !==
+          update.state.field(editorLivePreviewField, false);
+        if (forced || modeChanged || update.docChanged || update.viewportChanged || update.selectionSet) {
           this.decorations = this.build(update.view);
           this.applyFoldedLinkClasses(update.view);
         }
@@ -109,6 +145,7 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
         let m: RegExpExecArray | null;
 
         const selection = view.state.selection;
+        const sourceMode = view.state.field(editorLivePreviewField, false) === false;
 
         while ((m = re.exec(text)) !== null) {
           const target         = m[1].trim();
@@ -138,12 +175,19 @@ export function buildNoteLinkViewPlugin(ffcPlugin: FilteredFileCommandsPlugin) {
               !isStyled && statusUrl ? 'ffc-note-status-host' : '',
               // Expanded for editing: CM6 splits the mark into fragments, so
               // the pill's horizontal padding is dropped (see styles.css).
-              isStyled && cursorOnLink ? 'ffc-note-link-editing' : '',
+              isStyled && (sourceMode || cursorOnLink) ? 'ffc-note-link-editing' : '',
             ];
             const cls = clsParts.filter(Boolean).join(' ');
 
-            const styleParts = noteLinkStyleParts(color, iconId);
-            if (statusUrl) styleParts.push(`--ffc-note-link-status-icon: ${statusUrl}`);
+            const styleParts = noteLinkStyleParts(color, sourceMode ? undefined : iconId);
+            if (statusUrl && !sourceMode) styleParts.push(`--ffc-note-link-status-icon: ${statusUrl}`);
+
+            // Keep the widget outside the marked text, before the opening [[.
+            if (sourceMode && (iconId || rawStatus)) {
+              builder.add(linkFrom, linkFrom, Decoration.widget({
+                widget: new SourceLinkIcons(iconId, rawStatus, color), side: -1,
+              }));
+            }
 
             const spec: Parameters<typeof Decoration.mark>[0] = {
               ...(cls ? { class: cls } : {}),
