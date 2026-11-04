@@ -44,6 +44,19 @@ Create arbitrary command-palette commands that open a fuzzy picker showing only 
 **Filtered Files Widget**  
 A sidebar panel (left ribbon → *Filtered files*) with collapsible, drag-reorderable sections. Each section has its own filter rules, sort order, and optional result limit. Supports tag, frontmatter, path, and filename filters.
 
+**Obsidian CLI commands**  
+For scripts and AI agents. With Obsidian's CLI (1.12.2+) the plugin adds these commands, each returning JSON (or `{"error": "..."}`):
+
+| Command | What it does |
+| --- | --- |
+| `filtered-file-commands:types` | List note types and their creation fields |
+| `filtered-file-commands:create-type name=<name> [description=<text>] [template=<path>] [folder=<folder>] [fields=<json>]` | Create a note type (and its New note command) |
+| `filtered-file-commands:notes type=<name>` | List the notes matching a type |
+| `filtered-file-commands:create type=<name> title=<title> [fields=<json>] [description=<text>]` | Create a note from the type's template |
+| `filtered-file-commands:relation-types` | List relation types |
+| `filtered-file-commands:relations file=<path>` | List a note's relations |
+| `filtered-file-commands:relate source=<path> target=<path> relation=<name>` | Link two notes on both sides |
+
 ---
 
 ## Installation

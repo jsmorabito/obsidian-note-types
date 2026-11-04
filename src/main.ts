@@ -19,6 +19,7 @@ import { CombinedNewNoteModal } from './ui/combined-new-note-modal.ts';
 import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
 import { createApi, NoteTypesApi, RelationRef } from './api.ts';
+import { registerCliHandlers } from './commands/cli.ts';
 import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
@@ -92,6 +93,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
       if (noteType.enableFindCommand) this.registerFindCommand(noteType);
     }
     this.registerNewNoteCommand();
+    registerCliHandlers(this);
 
     this.registerEditorSuggest(new NoteTypeSuggest(this.app, this));
 
@@ -609,10 +611,9 @@ export class FilteredFileCommandsPlugin extends Plugin {
   openCreateNoteTypeModal(done?: (created: NoteType | null) => void): void {
     let created: NoteType | null = null;
     const modal = new CreateNoteTypeModal(this.app, this, async (values) => {
-      const noteType = buildNoteType(values.name, this.settings.noteTypes, {
+      const noteType = await this.createNoteType(values.name, {
         ...values, description: values.description || undefined,
       });
-      await this.addNoteType(noteType);
       created = noteType;
       new Notice(`Created note type "${noteType.name}".`);
     });
@@ -646,6 +647,13 @@ export class FilteredFileCommandsPlugin extends Plugin {
     modal.open();
   }
 
+  /** Build a note type with defaults, persist it and register its command. */
+  async createNoteType(name: string, overrides: Partial<NoteType> = {}): Promise<NoteType> {
+    const noteType = buildNoteType(name, this.settings.noteTypes, overrides);
+    await this.addNoteType(noteType);
+    return noteType;
+  }
+
   /** Persist a new note type and register its command; rolls back if saving fails. */
   async addNoteType(noteType: NoteType): Promise<void> {
     this.settings.noteTypes.push(noteType);
@@ -659,7 +667,7 @@ export class FilteredFileCommandsPlugin extends Plugin {
   }
 
   /** Folder a new note of this type goes in, following the type's save location. */
-  private resolveSaveFolder(noteType: NoteType): string {
+  resolveSaveFolder(noteType: NoteType): string {
     const folder = noteType.saveFolder?.trim().replace(/\/$/, '') ?? '';
     const location = effectiveSaveLocation(noteType);
     if (location === 'current') {

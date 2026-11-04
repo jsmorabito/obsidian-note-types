@@ -15,8 +15,11 @@ export function buildNoteType(
   overrides: Partial<NoteType> = {},
 ): NoteType {
   const taken = new Set(existing.map((o) => o.commandSlug).filter(Boolean));
+  const ids   = new Set(existing.map((o) => o.id));
+  let id = `ffc-notetype-${Date.now()}`;
+  for (let n = 2; ids.has(id); n++) id = `ffc-notetype-${Date.now()}-${n}`;
   return {
-    id: `ffc-notetype-${Date.now()}`,
+    id,
     commandSlug: uniqueCommandSlug(name, taken),
     name,
     templatePath: '',
