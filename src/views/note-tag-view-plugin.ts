@@ -167,7 +167,62 @@ export function buildNoteTagViewPlugin(plugin: FilteredFileCommandsPlugin): Exte
       && event.clientY >= last.top && event.clientY <= last.bottom;
   };
 
+  /** Width the hover icon adds to the chip, in em: icon (1em) + gap (0.25em). Keep in sync with the
+   *  ::after rule and the .ffc-tag-edge margin in styles.css. */
+  const ICON_GROWTH_EM = 1.25;
+
+  /**
+   * Flags the hovered tag as an "edge" tag when growing its hover icon would not fit on the line AND
+   * only whitespace follows it. CSS then keeps the line's layout unchanged (the chip hangs over the
+   * edge) instead of letting the tag wrap onto the next line and flicker.
+   */
+  const flagEdgeTag = (target: HTMLElement): void => {
+    const hashtag = target.closest<HTMLElement>('.cm-hashtag');
+    if (!hashtag) return;
+    const endPart = hashtag.classList.contains('cm-hashtag-end')
+      ? hashtag
+      : hashtag.nextElementSibling;
+    if (!endPart?.classList.contains('cm-hashtag-end')) return;
+    const tagEl = endPart.querySelector<HTMLElement>(`.${TAG_CLASS}`);
+    const line = endPart.closest<HTMLElement>('.cm-line');
+    if (!tagEl || !line?.lastChild) return;
+    const rects = tagEl.getClientRects();
+    const last = rects.item(rects.length - 1);
+    if (!last) return;
+
+    const tail = document.createRange();
+    tail.setStartAfter(endPart);
+    tail.setEndAfter(line.lastChild);
+    const isLast = tail.toString().trim() === '';
+
+    const after = getComputedStyle(tagEl, '::after');
+    // Measure the un-grown width, so the hover icon's own growth doesn't skew the result.
+    const grown = (parseFloat(after.width) || 0) + (parseFloat(after.marginLeft) || 0);
+    const lineRight = line.getBoundingClientRect().right
+      - (parseFloat(getComputedStyle(line).paddingRight) || 0);
+    const needed = (parseFloat(getComputedStyle(tagEl).fontSize) || 16) * ICON_GROWTH_EM;
+    const edge = isLast && lineRight - (last.right - grown) < needed;
+    if (tagEl.classList.contains('ffc-tag-edge') !== edge) tagEl.classList.toggle('ffc-tag-edge', edge);
+  };
+
+  let edgeFrame = 0;
+  let edgeTarget: HTMLElement | null = null;
+
   const click = EditorView.domEventHandlers({
+    // mousemove (not just mouseover) so the flag is re-evaluated after edits or a resize while the
+    // pointer rests on a tag; throttled to one layout read per frame.
+    mousemove: (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest?.('.cm-hashtag')) return false;
+      edgeTarget = target;
+      if (!edgeFrame) {
+        edgeFrame = window.requestAnimationFrame(() => {
+          edgeFrame = 0;
+          if (edgeTarget?.isConnected) flagEdgeTag(edgeTarget);
+        });
+      }
+      return false;
+    },
     click: (event, view) => {
       const tagEl = (event.target as HTMLElement | null)?.closest?.<HTMLElement>(`.${TAG_CLASS}`);
       const noteType = noteTypeFor(tagEl?.getAttribute(TYPE_ATTR) ?? null);

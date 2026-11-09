@@ -1,5 +1,9 @@
 # Obsidian community plugin
 
+## Before you start: sync with upstream
+
+**Always pull the latest changes from `origin` before making any change** (`git fetch origin && git status -sb`, then `git pull --rebase origin main`). This repo is also changed and released from elsewhere, and the copy in the Dev Vault has fallen far behind before (it was 39 commits behind and missing the whole note-tag feature's source). If there are uncommitted changes, `git stash -u` them first and tell the user rather than discarding anything.
+
 ## Project overview
 
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).

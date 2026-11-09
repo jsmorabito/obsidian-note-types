@@ -819,29 +819,37 @@
   cursor: pointer;
 }
 
-/* Note tag: the mark sits inside Obsidian's `.cm-hashtag`, which owns the chip's
-   padding and radius; ::before fills that box with a tint of the type's color. */
-.cm-hashtag:has(> .ffc-note-tag[style*="--ffc-note-tag-color"]) {
-  position: relative;
-  isolation: isolate;
-}
-
+/* Note tag: the mark sits inside Obsidian's `.cm-hashtag-begin` / `.cm-hashtag-end`
+   spans, which own the chip's padding and radius. The tint is painted by the inline
+   mark itself (not an absolutely positioned ::before, which only covers the bounding
+   box and gets clipped when the tag wraps onto a new line). The mark re-claims the
+   parent's horizontal padding via matching negative margins. */
 .ffc-note-tag[style*="--ffc-note-tag-color"] {
   color: var(--ffc-note-tag-color);
-  border-radius: inherit;
+  background: color-mix(in srgb, var(--ffc-note-tag-color) 15%, transparent);
+  padding-block: var(--tag-padding-y, 0.25em);
+  /* A tag is never split across lines (see nowrap on .cm-hashtag below). */
+  white-space: nowrap;
 }
 
-.ffc-note-tag[style*="--ffc-note-tag-color"]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: color-mix(in srgb, var(--ffc-note-tag-color) 15%, transparent);
+.cm-hashtag-begin > .ffc-note-tag[style*="--ffc-note-tag-color"] {
+  padding-left: var(--tag-padding-x, 0.65em);
+  margin-left: calc(-1 * var(--tag-padding-x, 0.65em));
+  border-radius: var(--tag-radius, 2em) 0 0 var(--tag-radius, 2em);
+}
+
+.cm-hashtag-end > .ffc-note-tag[style*="--ffc-note-tag-color"] {
+  padding-right: var(--tag-padding-x, 0.65em);
+  margin-right: calc(-1 * var(--tag-padding-x, 0.65em));
+  border-radius: 0 var(--tag-radius, 2em) var(--tag-radius, 2em) 0;
 }
 
 .cm-hashtag:has(> .ffc-note-tag) {
   cursor: pointer;
+  /* Never break inside a note tag or between its '#' and name parts. This also keeps the
+     hover icon (an inline-block, so a break opportunity) from wrapping alone and leaving
+     an empty chip stub. Trade-off: a tag wider than the line overflows instead of wrapping. */
+  white-space: nowrap;
 }
 
 /* A file-input icon grows in after the tag on hover: clicking it opens the New note dialog. */
@@ -862,6 +870,21 @@
 .cm-hashtag-end:hover > .ffc-note-tag[style*="--ffc-note-tag-icon"]::after {
   width: 1em;
   margin-left: 0.25em;
+}
+
+/* Edge case only: when the tag is too close to the line's right edge for the icon to fit,
+   growing it would wrap the tag to the next line, move it out from under the pointer
+   and flicker. The plugin adds .ffc-tag-edge on hover in that case. The chip still grows
+   exactly as it does mid-line (so it looks identical), but the hashtag's negative
+   right margin cancels that growth in the line's layout: the chip just hangs over the
+   edge instead of reflowing. Only applied to the last tag on a line (see ICON_GROWTH_EM
+   in main.js). -1.25em = the icon (1em) + its left margin (0.25em) from the ::after rules. */
+.cm-hashtag-end:has(> .ffc-note-tag.ffc-tag-edge) {
+  transition: margin-right 0.1s ease-out;
+}
+
+.cm-hashtag-end:has(> .ffc-note-tag.ffc-tag-edge[style*="--ffc-note-tag-icon"]):hover {
+  margin-right: -1.25em;
 }
 
 /* Create typed note inline: the in-progress pill reuses the .ffc-note-link look. */
