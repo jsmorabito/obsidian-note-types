@@ -5,6 +5,20 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0]
+
+### Added
+
+- **Add a template from a note type's settings.** The Template setting now has a
+  "+" button that asks for a name and creates an empty template file in the folder
+  Obsidian reads templates from (the plugin's override, the core Templates plugin,
+  or Templater; `Templates/` if none is set), then selects it. A file icon next to it
+  opens the selected template for editing. The "Create note type" dialog has the same "+" button.
+
+### Fixed
+
+- A templates folder of `/` is treated as the vault root.
+
 ## [1.17.0]
 
 ### Added

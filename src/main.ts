@@ -20,7 +20,7 @@ import { NoteTypeSuggest } from './ui/note-type-suggest.ts';
 import { NotePreviewPopup } from './ui/note-preview-popup.ts';
 import { createApi, NoteTypesApi, RelationRef } from './api.ts';
 import { registerCliHandlers } from './commands/cli.ts';
-import { corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
+import { communityPluginSettings, corePlugins, hotkeyManager, submenuOf } from './utils/obsidian-internals.ts';
 import { FilteredFilesWidgetView } from './views/filtered-files-widget.ts';
 import { buildNoteLinkViewPlugin, refreshNoteLinkStylesEffect } from './views/note-link-view-plugin.ts';
 import { buildNoteTagViewPlugin } from './views/note-tag-view-plugin.ts';
@@ -825,22 +825,50 @@ export class FilteredFileCommandsPlugin extends Plugin {
 
   // ── Template helpers ──────────────────────────────────────────────────────────
 
-  private getTemplatesFolder(): string {
+  /**
+   * Where Obsidian reads templates from: this plugin's override, else the core
+   * Templates plugin's folder, else Templater's. Empty when none is configured;
+   * "/" means the vault root.
+   */
+  getTemplatesFolder(): string {
     if (this.settings.templatesFolder) return this.settings.templatesFolder;
     try {
       const core = corePlugins(this.app)?.plugins?.['templates'];
-      const options = (core?.instance as { options?: { folder?: string } } | undefined)?.options;
-      if (core?.enabled) return options?.folder ?? '';
+      if (core?.enabled) {
+        const options = (core.instance as { options?: { folder?: string } } | undefined)?.options;
+        return options?.folder ?? '';
+      }
     } catch { /* ignore */ }
-    return '';
+    const templater = communityPluginSettings(this.app, 'templater-obsidian')?.templates_folder;
+    return typeof templater === 'string' ? templater : '';
+  }
+
+  /** Folder new templates go in, without surrounding slashes. '' is the vault root; defaults to "Templates" when none is configured. */
+  getNewTemplateFolder(): string {
+    const configured = this.getTemplatesFolder();
+    return configured ? configured.replace(/^\/+|\/+$/g, '') : 'Templates';
+  }
+
+  /** Creates an empty template note in the templates folder (making the folder if needed). */
+  async createTemplateFile(rawName: string): Promise<TFile> {
+    const name = rawName.trim().replace(/\.md$/i, '');
+    if (!name) throw new Error('Enter a name for the template.');
+    if (/[\\/:*?"<>|]/.test(name)) throw new Error('Template names cannot contain \\ / : * ? " < > |');
+    if (name.startsWith('.') || name.endsWith('.')) throw new Error('Template names cannot start or end with a dot.');
+
+    const folder = this.getNewTemplateFolder();
+    if (folder && !this.app.vault.getFolderByPath(folder)) await this.app.vault.createFolder(folder);
+
+    const path = folder ? `${folder}/${name}.md` : `${name}.md`;
+    if (this.app.vault.getAbstractFileByPath(path)) throw new Error(`"${path}" already exists.`);
+    return this.app.vault.create(path, '');
   }
 
   getTemplateFiles(): TFile[] {
-    const folder = this.getTemplatesFolder();
+    const folder = this.getTemplatesFolder().replace(/^\/+|\/+$/g, '');
     const allMd  = this.app.vault.getMarkdownFiles();
     if (!folder) return allMd;
-    const prefix = folder.endsWith('/') ? folder : folder + '/';
-    return allMd.filter((f) => f.path.startsWith(prefix));
+    return allMd.filter((f) => f.path.startsWith(folder + '/'));
   }
 
   // ── Persistence ───────────────────────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import { App, ButtonComponent, Modal, Notice, Setting } from 'obsidian';
+import type { TFile } from 'obsidian';
+import { addNewTemplateButton } from './new-template-modal.ts';
 import { addSaveLocationSettings } from './save-location-setting.ts';
 import type { FilteredFileCommandsPlugin } from '../main.ts';
 import type { FilterSpec, NoteType } from '../types.ts';
@@ -40,20 +42,30 @@ export class CreateNoteTypeModal extends Modal {
       .addText((text) => text.setPlaceholder('Optional').onChange((v) => { this.values.description = v; }));
 
     const templateFiles = this.plugin.getTemplateFiles();
+    let onTemplateCreated = (_file: TFile): void => { /* set below */ };
+    let templateSetting: Setting;
     if (templateFiles.length > 0) {
-      new Setting(contentEl)
+      templateSetting = new Setting(contentEl)
         .setName('Template')
         .addDropdown((dd) => {
           dd.addOption('', 'None');
           for (const f of templateFiles) dd.addOption(f.path, f.basename);
           dd.setValue('').onChange((v) => { this.values.templatePath = v; });
+          onTemplateCreated = (file) => { dd.addOption(file.path, file.basename); dd.setValue(file.path); };
         });
     } else {
-      new Setting(contentEl)
+      templateSetting = new Setting(contentEl)
         .setName('Template')
-        .setDesc('No templates found. Set the templates folder in the main settings.')
-        .addText((text) => text.setPlaceholder('Templates/Meeting.md').onChange((v) => { this.values.templatePath = v.trim(); }));
+        .setDesc('No templates found. Add one with +, or set the templates folder in the main settings.')
+        .addText((text) => {
+          text.setPlaceholder('Templates/Meeting.md').onChange((v) => { this.values.templatePath = v.trim(); });
+          onTemplateCreated = (file) => { text.setValue(file.path); };
+        });
     }
+    addNewTemplateButton(this.app, this.plugin, templateSetting, (file) => {
+      this.values.templatePath = file.path;
+      onTemplateCreated(file);
+    });
 
     addSaveLocationSettings(this.app, contentEl, this.values);
 

@@ -5,6 +5,7 @@ import { addSaveLocationSettings } from './save-location-setting.ts';
 import type { FilterSpec, NoteField } from '../types.ts';
 import { NoteTypeFilterModal } from './note-type-filter-modal.ts';
 import { NoteFieldModal } from './note-field-modal.ts';
+import { addNewTemplateButton, addOpenTemplateButton } from './new-template-modal.ts';
 import { KeyLabelFieldModal } from './key-label-field-modal.ts';
 import { IconInputSuggest } from './icon-suggest.ts';
 import { noteTagError, normalizeNoteTag } from '../views/note-tag-view-plugin.ts';
@@ -314,20 +315,30 @@ export class NoteTypeSettingsPage extends SettingPage {
 
     // ── Template & save folder ───────────────────────────────────────────────
     const templateFiles = this.plugin.getTemplateFiles();
-    if (templateFiles.length > 0) {
-      new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
+    let syncOpenButton = (): void => { /* set below */ };
+    const templateSetting = templateFiles.length > 0
+      ? new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
         .addDropdown((dd) => {
           dd.addOption('', '— none —');
           for (const f of templateFiles) dd.addOption(f.path, f.basename);
+          // Keep a stale reference visible so it isn't silently dropped.
+          if (obj.templatePath && !templateFiles.some((f) => f.path === obj.templatePath)) {
+            dd.addOption(obj.templatePath, `${obj.templatePath} (missing)`);
+          }
           dd.setValue(obj.templatePath || '');
-          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); });
-        });
-    } else {
-      new Setting(contentEl).setName('Template').setDesc('No templates found. Set the templates folder in the main settings, or check it contains .md files.')
+          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); syncOpenButton(); });
+        })
+      : new Setting(contentEl).setName('Template').setDesc('No templates found. Add one with +, set the templates folder in the main settings, or type a path.')
         .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
-          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); })
+          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); syncOpenButton(); })
         );
-    }
+
+    // Both buttons are placed in front of the input; the plus ends up leftmost.
+    syncOpenButton = addOpenTemplateButton(this.plugin.app, templateSetting, () => obj.templatePath || '');
+    addNewTemplateButton(this.plugin.app, this.plugin, templateSetting, (file) => {
+      obj.templatePath = file.path;
+      void this.plugin.saveSettings().then(() => this.display());
+    });
 
     addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
 

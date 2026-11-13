@@ -41,3 +41,9 @@ interface CorePlugins {
 export function corePlugins(app: App): CorePlugins | undefined {
   return (app as App & { internalPlugins?: CorePlugins }).internalPlugins;
 }
+
+/** Settings object of an installed community plugin (`app.plugins.plugins[id].settings`). */
+export function communityPluginSettings(app: App, id: string): Record<string, unknown> | undefined {
+  const plugins = (app as App & { plugins?: { plugins?: Record<string, { settings?: Record<string, unknown> } | undefined> } }).plugins;
+  return plugins?.plugins?.[id]?.settings;
+}
