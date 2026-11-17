@@ -1080,40 +1080,35 @@ var NoteTypeSettingsPage = class extends import_obsidian13.SettingPage {
         (_a2 = this.onDataChange) == null ? void 0 : _a2.call(this);
       })
     );
-    const onAddNoteDetectionFilters = () => {
-      var _a2;
-      return this.addItem(
-        (_a2 = obj.matchFilters) != null ? _a2 : obj.matchFilters = [],
-        { key: "", operator: "equals", value: "" },
-        (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open()
-      );
+    const templateFiles = this.plugin.getTemplateFiles();
+    let syncOpenButton = () => {
     };
-    addHeadingWithInfo(
-      contentEl,
-      "Note detection filters",
-      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
-      { label: "Add detection filter", onClick: onAddNoteDetectionFilters }
-    );
-    new import_obsidian13.Setting(contentEl).setName("Filter match mode").setDesc("Should a file match all filters (and) or at least one filter (or)?").addDropdown(
-      (dd) => {
-        var _a2;
-        return dd.addOption("all", "Match all (and)").addOption("any", "Match any (or)").setValue((_a2 = obj.matchMode) != null ? _a2 : "all").onChange(async (value) => {
-          obj.matchMode = value;
-          await this.plugin.saveSettings();
-        });
+    const templateSetting = templateFiles.length > 0 ? new import_obsidian13.Setting(contentEl).setName("Template").setDesc("Template file applied when creating a new note of this type.").addDropdown((dd) => {
+      dd.addOption("", "\u2014 none \u2014");
+      for (const f of templateFiles)
+        dd.addOption(f.path, f.basename);
+      if (obj.templatePath && !templateFiles.some((f) => f.path === obj.templatePath)) {
+        dd.addOption(obj.templatePath, `${obj.templatePath} (missing)`);
       }
-    );
-    if (!obj.matchFilters || obj.matchFilters.length === 0) {
-      contentEl.createEl("p", { text: "No filters \u2014 save folder will be used as a fallback.", cls: "ffc-hint" });
-    }
-    for (let fi = 0; fi < ((_b = obj.matchFilters) != null ? _b : []).length; fi++) {
-      const filter = obj.matchFilters[fi];
-      new import_obsidian13.Setting(contentEl).setName(this._filterSummary(filter)).addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit filter").onClick(() => new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove filter").onClick(async () => {
-        obj.matchFilters.splice(fi, 1);
+      dd.setValue(obj.templatePath || "");
+      dd.onChange(async (value) => {
+        obj.templatePath = value;
         await this.plugin.saveSettings();
-        this.display();
-      }));
-    }
+        syncOpenButton();
+      });
+    }) : new import_obsidian13.Setting(contentEl).setName("Template").setDesc("No templates found. Add one with +, set the templates folder in the main settings, or type a path.").addText(
+      (text) => text.setPlaceholder("path/to/template.md").setValue(obj.templatePath || "").onChange(async (value) => {
+        obj.templatePath = value.trim();
+        await this.plugin.saveSettings();
+        syncOpenButton();
+      })
+    );
+    syncOpenButton = addOpenTemplateButton(this.plugin.app, templateSetting, () => obj.templatePath || "");
+    addNewTemplateButton(this.plugin.app, this.plugin, templateSetting, (file) => {
+      obj.templatePath = file.path;
+      void this.plugin.saveSettings().then(() => this.display());
+    });
+    addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
     new import_obsidian13.Setting(contentEl).setName("Show in trigger menu").setDesc(`When enabled, matching files appear in the "${this.plugin.settings.triggerKey || "@"}" inline trigger menu.`).addToggle(
       (toggle) => {
         var _a2;
@@ -1156,6 +1151,11 @@ var NoteTypeSettingsPage = class extends import_obsidian13.SettingPage {
         this.plugin.refreshNoteLinkStyles();
       });
     });
+    addHeadingWithInfo(
+      contentEl,
+      "Appearance",
+      "How inline links to notes of this type are styled: fill, color, icon and status."
+    );
     new import_obsidian13.Setting(contentEl).setName("Style note links").setDesc("When enabled, inline links to files of this type will have their underline removed and a background fill applied.").addToggle(
       (toggle) => {
         var _a2;
@@ -1268,35 +1268,37 @@ var NoteTypeSettingsPage = class extends import_obsidian13.SettingPage {
         });
       }
     );
-    const templateFiles = this.plugin.getTemplateFiles();
-    let syncOpenButton = () => {
+    const onAddNoteDetectionFilters = () => {
+      var _a2;
+      return this.addItem(
+        (_a2 = obj.matchFilters) != null ? _a2 : obj.matchFilters = [],
+        { key: "", operator: "equals", value: "" },
+        (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open()
+      );
     };
-    const templateSetting = templateFiles.length > 0 ? new import_obsidian13.Setting(contentEl).setName("Template").setDesc("Template file applied when creating a new note of this type.").addDropdown((dd) => {
-      dd.addOption("", "\u2014 none \u2014");
-      for (const f of templateFiles)
-        dd.addOption(f.path, f.basename);
-      if (obj.templatePath && !templateFiles.some((f) => f.path === obj.templatePath)) {
-        dd.addOption(obj.templatePath, `${obj.templatePath} (missing)`);
-      }
-      dd.setValue(obj.templatePath || "");
-      dd.onChange(async (value) => {
-        obj.templatePath = value;
-        await this.plugin.saveSettings();
-        syncOpenButton();
-      });
-    }) : new import_obsidian13.Setting(contentEl).setName("Template").setDesc("No templates found. Add one with +, set the templates folder in the main settings, or type a path.").addText(
-      (text) => text.setPlaceholder("path/to/template.md").setValue(obj.templatePath || "").onChange(async (value) => {
-        obj.templatePath = value.trim();
-        await this.plugin.saveSettings();
-        syncOpenButton();
-      })
+    addHeadingWithInfo(
+      contentEl,
+      "Note detection filters",
+      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
+      { label: "Add detection filter", onClick: onAddNoteDetectionFilters }
     );
-    syncOpenButton = addOpenTemplateButton(this.plugin.app, templateSetting, () => obj.templatePath || "");
-    addNewTemplateButton(this.plugin.app, this.plugin, templateSetting, (file) => {
-      obj.templatePath = file.path;
-      void this.plugin.saveSettings().then(() => this.display());
-    });
-    addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
+    new import_obsidian13.Setting(contentEl).setName("Filter match mode").setDesc("Should a file match all filters (and) or at least one filter (or)?").addDropdown(
+      (dd) => {
+        var _a2;
+        return dd.addOption("all", "Match all (and)").addOption("any", "Match any (or)").setValue((_a2 = obj.matchMode) != null ? _a2 : "all").onChange(async (value) => {
+          obj.matchMode = value;
+          await this.plugin.saveSettings();
+        });
+      }
+    );
+    for (let fi = 0; fi < ((_b = obj.matchFilters) != null ? _b : []).length; fi++) {
+      const filter = obj.matchFilters[fi];
+      new import_obsidian13.Setting(contentEl).setName(this._filterSummary(filter)).addExtraButton((btn) => btn.setIcon("pencil").setTooltip("Edit filter").onClick(() => new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open())).addExtraButton((btn) => btn.setIcon("trash-2").setTooltip("Remove filter").onClick(async () => {
+        obj.matchFilters.splice(fi, 1);
+        await this.plugin.saveSettings();
+        this.display();
+      }));
+    }
     const onAddNoteCreationFields = () => {
       var _a2;
       return this.addItem(

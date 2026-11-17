@@ -5,6 +5,16 @@ All notable changes to this plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.1]
+
+### Changed
+
+- **Note type settings are regrouped.** Template and Default location now sit with the
+  name and description at the top. Style note links, link color, link icon and status icons
+  are grouped under a new Appearance heading, and Note detection filters moved below
+  Default location.
+- Removed the "No filters" hint under Note detection filters; the info icon says the same.
+
 ## [1.18.0]
 
 ### Added

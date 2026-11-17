@@ -108,38 +108,34 @@ export class NoteTypeSettingsPage extends SettingPage {
         })
       );
 
-    // ── Note detection ───────────────────────────────────────────────────────
-    const onAddNoteDetectionFilters = () => this.addItem(obj.matchFilters ??= [], { key: '', operator: 'equals' as const, value: '' },
-      (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open());
-    addHeadingWithInfo(contentEl, 'Note detection filters',
-      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
-      { label: 'Add detection filter', onClick: onAddNoteDetectionFilters });
+    // ── Template & default location (general) ────────────────────────────────
+    const templateFiles = this.plugin.getTemplateFiles();
+    let syncOpenButton = (): void => { /* set below */ };
+    const templateSetting = templateFiles.length > 0
+      ? new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
+        .addDropdown((dd) => {
+          dd.addOption('', '— none —');
+          for (const f of templateFiles) dd.addOption(f.path, f.basename);
+          // Keep a stale reference visible so it isn't silently dropped.
+          if (obj.templatePath && !templateFiles.some((f) => f.path === obj.templatePath)) {
+            dd.addOption(obj.templatePath, `${obj.templatePath} (missing)`);
+          }
+          dd.setValue(obj.templatePath || '');
+          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); syncOpenButton(); });
+        })
+      : new Setting(contentEl).setName('Template').setDesc('No templates found. Add one with +, set the templates folder in the main settings, or type a path.')
+        .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
+          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); syncOpenButton(); })
+        );
 
-    new Setting(contentEl)
-      .setName('Filter match mode')
-      .setDesc('Should a file match all filters (and) or at least one filter (or)?')
-      .addDropdown((dd) =>
-        dd.addOption('all', 'Match all (and)').addOption('any', 'Match any (or)')
-          .setValue(obj.matchMode ?? 'all')
-          .onChange(async (value) => { obj.matchMode = value as 'all' | 'any'; await this.plugin.saveSettings(); })
-      );
+    // Both buttons are placed in front of the input; the plus ends up leftmost.
+    syncOpenButton = addOpenTemplateButton(this.plugin.app, templateSetting, () => obj.templatePath || '');
+    addNewTemplateButton(this.plugin.app, this.plugin, templateSetting, (file) => {
+      obj.templatePath = file.path;
+      void this.plugin.saveSettings().then(() => this.display());
+    });
 
-    if (!obj.matchFilters || obj.matchFilters.length === 0) {
-      contentEl.createEl('p', { text: 'No filters — save folder will be used as a fallback.', cls: 'ffc-hint' });
-    }
-    for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
-      const filter = obj.matchFilters[fi];
-      new Setting(contentEl)
-        .setName(this._filterSummary(filter))
-        .addExtraButton((btn) => btn.setIcon('pencil').setTooltip('Edit filter')
-          .onClick(() => new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open()))
-        .addExtraButton((btn) => btn.setIcon('trash-2').setTooltip('Remove filter')
-          .onClick(async () => {
-            obj.matchFilters.splice(fi, 1);
-            await this.plugin.saveSettings();
-            this.display();
-          }));
-    }
+    addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
 
     new Setting(contentEl)
       .setName('Show in trigger menu')
@@ -184,6 +180,10 @@ export class NoteTypeSettingsPage extends SettingPage {
             this.plugin.refreshNoteLinkStyles();
           });
       });
+
+    // ── Appearance ───────────────────────────────────────────────────────────
+    addHeadingWithInfo(contentEl, 'Appearance',
+      'How inline links to notes of this type are styled: fill, color, icon and status.');
 
     new Setting(contentEl)
       .setName('Style note links')
@@ -313,34 +313,35 @@ export class NoteTypeSettingsPage extends SettingPage {
           })
       );
 
-    // ── Template & save folder ───────────────────────────────────────────────
-    const templateFiles = this.plugin.getTemplateFiles();
-    let syncOpenButton = (): void => { /* set below */ };
-    const templateSetting = templateFiles.length > 0
-      ? new Setting(contentEl).setName('Template').setDesc('Template file applied when creating a new note of this type.')
-        .addDropdown((dd) => {
-          dd.addOption('', '— none —');
-          for (const f of templateFiles) dd.addOption(f.path, f.basename);
-          // Keep a stale reference visible so it isn't silently dropped.
-          if (obj.templatePath && !templateFiles.some((f) => f.path === obj.templatePath)) {
-            dd.addOption(obj.templatePath, `${obj.templatePath} (missing)`);
-          }
-          dd.setValue(obj.templatePath || '');
-          dd.onChange(async (value) => { obj.templatePath = value; await this.plugin.saveSettings(); syncOpenButton(); });
-        })
-      : new Setting(contentEl).setName('Template').setDesc('No templates found. Add one with +, set the templates folder in the main settings, or type a path.')
-        .addText((text) => text.setPlaceholder('path/to/template.md').setValue(obj.templatePath || '')
-          .onChange(async (value) => { obj.templatePath = value.trim(); await this.plugin.saveSettings(); syncOpenButton(); })
-        );
+    // ── Note detection ───────────────────────────────────────────────────────
+    const onAddNoteDetectionFilters = () => this.addItem(obj.matchFilters ??= [], { key: '', operator: 'equals' as const, value: '' },
+      (item) => new NoteTypeFilterModal(this.plugin.app, this.plugin, item, () => this.display()).open());
+    addHeadingWithInfo(contentEl, 'Note detection filters',
+      'Filters that identify existing files of this type. Used by the trigger menu and the "find" command. If no filters are set, files in the save folder are used as a fallback.',
+      { label: 'Add detection filter', onClick: onAddNoteDetectionFilters });
 
-    // Both buttons are placed in front of the input; the plus ends up leftmost.
-    syncOpenButton = addOpenTemplateButton(this.plugin.app, templateSetting, () => obj.templatePath || '');
-    addNewTemplateButton(this.plugin.app, this.plugin, templateSetting, (file) => {
-      obj.templatePath = file.path;
-      void this.plugin.saveSettings().then(() => this.display());
-    });
+    new Setting(contentEl)
+      .setName('Filter match mode')
+      .setDesc('Should a file match all filters (and) or at least one filter (or)?')
+      .addDropdown((dd) =>
+        dd.addOption('all', 'Match all (and)').addOption('any', 'Match any (or)')
+          .setValue(obj.matchMode ?? 'all')
+          .onChange(async (value) => { obj.matchMode = value as 'all' | 'any'; await this.plugin.saveSettings(); })
+      );
 
-    addSaveLocationSettings(this.plugin.app, contentEl, obj, () => this.plugin.saveSettings());
+    for (let fi = 0; fi < (obj.matchFilters ?? []).length; fi++) {
+      const filter = obj.matchFilters[fi];
+      new Setting(contentEl)
+        .setName(this._filterSummary(filter))
+        .addExtraButton((btn) => btn.setIcon('pencil').setTooltip('Edit filter')
+          .onClick(() => new NoteTypeFilterModal(this.plugin.app, this.plugin, filter, () => this.display()).open()))
+        .addExtraButton((btn) => btn.setIcon('trash-2').setTooltip('Remove filter')
+          .onClick(async () => {
+            obj.matchFilters.splice(fi, 1);
+            await this.plugin.saveSettings();
+            this.display();
+          }));
+    }
 
     // ── Creation fields ─────────────────────────────────────────────────────
     const onAddNoteCreationFields = () => this.addItem(obj.fields ??= [], { key: '', label: '', type: 'text' as const },
